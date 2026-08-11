@@ -1,1 +1,0 @@
-{"version":3,"file":"module-progress.d.ts","sourceRoot":"","sources":["../../../src/tui/components/module-progress.tsx"],"names":[],"mappings":"AAAA,OAAO,KAAK,MAAM,OAAO,CAAC;AAE1B,OAAO,KAAK,EAAE,oBAAoB,EAAE,MAAM,oBAAoB,CAAC;AA2B/D,UAAU,mBAAmB;IAC3B,OAAO,EAAE,oBAAoB,EAAE,CAAC;CACjC;AAED,wBAAgB,cAAc,CAAC,EAAE,OAAO,EAAE,EAAE,mBAAmB,GAAG,KAAK,CAAC,YAAY,CA0BnF"}
