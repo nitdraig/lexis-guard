@@ -34,22 +34,27 @@ export class PerformanceModule implements AuditModule {
   readonly id = 'performance';
   readonly name = 'Performance';
 
-  async run(target: string, _config: Lexisrc, engine: HttpEngine): Promise<Finding[]> {
+  async run(target: string, _config: Lexisrc, engine: HttpEngine, onFinding?: (f: Finding) => void): Promise<Finding[]> {
     const findings: Finding[] = [];
+    // Stream each finding to the UI the moment it is detected.
+    const track = (f: Finding): void => {
+      findings.push(f);
+      onFinding?.(f);
+    };
 
     // 1. Baseline latency on root
     const resp = await engine.fetch('/', 'GET');
     const { latency } = resp;
 
     if (latency.total > 2000) {
-      findings.push(
+      track(
         finding('HIGH_LATENCY', 'GET', '/', 'Total response time exceeds 2s', 'medium',
           `Total: ${latency.total.toFixed(0)}ms, TTFB: ${latency.ttfb.toFixed(0)}ms`, undefined, 4.0)
       );
     }
 
     if (latency.ttfb > 1000) {
-      findings.push(
+      track(
         finding('HIGH_TTFB', 'GET', '/', 'Time to first byte exceeds 1s', 'medium',
           `TTFB: ${latency.ttfb.toFixed(0)}ms`, undefined, 4.0)
       );
@@ -63,7 +68,7 @@ export class PerformanceModule implements AuditModule {
     const contentEncoding = (resp.headers['content-encoding'] as string) ?? '';
 
     if (contentLength > 50_000 && !contentEncoding) {
-      findings.push(
+      track(
         finding('UNCOMPRESSED_LARGE_PAYLOAD', 'GET', '/', 'Large response not compressed', 'low',
           `Content-Length: ${contentLength} bytes, no Content-Encoding`, undefined, 3.0)
       );
@@ -75,7 +80,7 @@ export class PerformanceModule implements AuditModule {
     if (target.startsWith('https://')) {
       const via = (resp.headers['via'] as string) ?? '';
       if (via.includes('1.1')) {
-        findings.push(
+        track(
           finding('HTTP2_NOT_SUPPORTED', 'GET', '/', 'HTTP/2 not detected', 'info',
             'Server responded via HTTP/1.1', undefined, 1.0)
         );

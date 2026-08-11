@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { LocalProvider } from '../../src/ai/local-provider.js';
+import { OpenAIProvider } from '../../src/ai/openai-provider.js';
 import { AIRouter } from '../../src/ai/ai-router.js';
 import type { DedupedFinding } from '../../src/core/deduplicator.js';
 
@@ -70,5 +71,29 @@ describe('AIRouter', () => {
     const result = await router.synthesize(findings);
     expect(result.overall_posture).toBe('needs_attention');
     expect(result.summary).toContain('1 unique findings');
+  });
+
+  it('consult returns an answer mentioning prioritized risks', async () => {
+    const router = new AIRouter(new LocalProvider(), new LocalProvider());
+    const findings = [
+      makeFinding('NO_RATE_LIMIT', 'high'),
+      makeFinding('STACK_LEAK', 'low')
+    ];
+
+    const result = await router.consult('como arreglo el rate limit?', findings);
+    expect(result.answer).toContain('NO_RATE_LIMIT');
+    expect(result.answer).toContain('2 unique findings');
+  });
+
+  it('consult delegates to the synthesis provider', async () => {
+    const router = new AIRouter(new LocalProvider(), new OpenAIProvider());
+    const result = await router.consult('hay algo critico?', [makeFinding('X', 'critical')]);
+    expect(result.answer).toContain('X');
+  });
+
+  it('consult declines clearly off-topic questions', async () => {
+    const router = new AIRouter(new LocalProvider(), new LocalProvider());
+    const result = await router.consult('tell me a joke', [makeFinding('X', 'high')]);
+    expect(result.answer).toContain('scoped');
   });
 });

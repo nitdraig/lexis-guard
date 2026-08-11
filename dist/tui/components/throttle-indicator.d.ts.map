@@ -1,0 +1,1 @@
+{"version":3,"file":"throttle-indicator.d.ts","sourceRoot":"","sources":["../../../src/tui/components/throttle-indicator.tsx"],"names":[],"mappings":"AAAA,OAAO,KAAK,MAAM,OAAO,CAAC;AAS1B,UAAU,sBAAsB;IAC9B,KAAK,EAAE,MAAM,CAAC;CACf;AAED,wBAAgB,iBAAiB,CAAC,EAAE,KAAK,EAAE,EAAE,sBAAsB,GAAG,KAAK,CAAC,YAAY,CAQvF"}

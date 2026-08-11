@@ -37,7 +37,9 @@
     }
   },
   "ai": {
-    "provider": "anthropic",
+    "provider": "openai",
+    "model": "gpt-5.4-nano",
+    "api_key": "",
     "redact_target": true,
     "local_fallback": false
   },

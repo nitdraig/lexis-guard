@@ -1,6 +1,6 @@
 import { cosmiconfigSync } from 'cosmiconfig';
 import { parseLexisrcStrict } from './lexisrc-parser.js';
-import type { Lexisrc } from './lexisrc-schema.js';
+import { rawLexisrcSchema, type Lexisrc, type RawLexisrc } from './lexisrc-schema.js';
 
 const moduleName = 'lexis';
 
@@ -9,6 +9,15 @@ const moduleName = 'lexis';
  * Validates with Zod and interpolates env vars.
  */
 export function loadConfig(configPath?: string): Lexisrc {
+  const raw = loadRawConfig(configPath);
+  return parseLexisrcStrict(raw);
+}
+
+/**
+ * Load the raw `.lexisrc.json` content WITHOUT env interpolation.
+ * Needed by the TUI to edit and re-save config without leaking secrets.
+ */
+export function loadRawConfig(configPath?: string): RawLexisrc {
   const explorer = cosmiconfigSync(moduleName, {
     searchPlaces: [
       `.${moduleName}rc.json`,
@@ -30,5 +39,13 @@ export function loadConfig(configPath?: string): Lexisrc {
     throw new Error(`No ${moduleName}rc configuration found. Create a .lexisrc.json file.`);
   }
 
-  return parseLexisrcStrict(result.config);
+  const parsed = rawLexisrcSchema.safeParse(result.config);
+  if (!parsed.success) {
+    const errors = parsed.error.errors.map(
+      (e) => `${e.path.join('.')}: ${e.message}`
+    );
+    throw new Error(`Invalid ${moduleName}rc configuration:\n${errors.join('\n')}`);
+  }
+
+  return parsed.data;
 }

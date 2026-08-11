@@ -18,5 +18,10 @@ export interface AuditModule {
    * @param config — parsed `.lexisrc.json`.
    * @param engine — shared HTTP engine with throttle + concurrency control.
    */
-  run(target: string, config: Lexisrc, engine: HttpEngine): Promise<Finding[]>;
+  run(
+    target: string,
+    config: Lexisrc,
+    engine: HttpEngine,
+    onFinding?: (finding: Finding) => void
+  ): Promise<Finding[]>;
 }

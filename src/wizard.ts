@@ -25,13 +25,13 @@ export async function runWizard(): Promise<WizardAnswers | null> {
   intro('LexisGuard CLI');
 
   const configPathResult = await text({
-    message: 'Ruta a .lexisrc.json (dejar vacio para buscar automaticamente)',
+    message: 'Path to .lexisrc.json (leave empty to search automatically)',
     placeholder: './.lexisrc.json',
     initialValue: ''
   });
 
   if (isCancel(configPathResult)) {
-    outro('Cancelado');
+    outro('Cancelled');
     return null;
   }
   const configPath = typeof configPathResult === 'string' ? configPathResult : '';
@@ -40,28 +40,28 @@ export async function runWizard(): Promise<WizardAnswers | null> {
   try {
     config = loadConfig(configPath || undefined);
   } catch (err) {
-    outro(`Error cargando config: ${err instanceof Error ? err.message : String(err)}`);
+    outro(`Error loading config: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 
   const targetResult = await text({
-    message: 'Target a auditar',
+    message: 'Target to audit',
     placeholder: config.scope.allowed_targets[0] ?? 'https://api.example.com',
     initialValue: config.scope.allowed_targets[0] ?? ''
   });
 
   if (isCancel(targetResult)) {
-    outro('Cancelado');
+    outro('Cancelled');
     return null;
   }
   const target = typeof targetResult === 'string' ? targetResult : '';
   if (target.length === 0 || !target.includes('.')) {
-    outro('Target invalido');
+    outro('Invalid target');
     return null;
   }
 
   const modeResult = await select({
-    message: 'Modo de ejecucion',
+    message: 'Execution mode',
     options: [
       { value: 'safe' as const, label: 'Safe — checks no invasivos (default)' },
       { value: 'aggressive' as const, label: 'Aggressive — fuzzing + stress test' }
@@ -70,7 +70,7 @@ export async function runWizard(): Promise<WizardAnswers | null> {
   });
 
   if (isCancel(modeResult)) {
-    outro('Cancelado');
+    outro('Cancelled');
     return null;
   }
   const mode = modeResult as 'safe' | 'aggressive';
@@ -78,18 +78,18 @@ export async function runWizard(): Promise<WizardAnswers | null> {
   // lexis: aggressive en produccion requiere confirmacion explicita
   if (mode === 'aggressive' && config.scope.environment === 'production') {
     const confirmed = await confirm({
-      message: `Estas en PRODUCCION. Confirmar modo aggressive para ${target}`,
+      message: `You are on PRODUCTION. Confirm aggressive mode for ${target}`,
       initialValue: false
     });
 
     if (!confirmed || isCancel(confirmed)) {
-      outro('Modo aggressive cancelado');
+      outro('Aggressive mode cancelled');
       return null;
     }
   }
 
   const formatResult = await select({
-    message: 'Formato de reporte',
+    message: 'Report format',
     options: [
       { value: 'json' as const, label: 'JSON' },
       { value: 'md' as const, label: 'Markdown' },
@@ -99,7 +99,7 @@ export async function runWizard(): Promise<WizardAnswers | null> {
   });
 
   if (isCancel(formatResult)) {
-    outro('Cancelado');
+    outro('Cancelled');
     return null;
   }
   const format = formatResult as 'json' | 'md' | 'sarif';
@@ -111,12 +111,12 @@ export async function runWizard(): Promise<WizardAnswers | null> {
   });
 
   if (isCancel(outputResult)) {
-    outro('Cancelado');
+    outro('Cancelled');
     return null;
   }
   const output = typeof outputResult === 'string' ? outputResult : '';
 
-  outro('Configuracion completa. Iniciando auditoria...');
+  outro('Configuration complete. Starting audit...');
 
   return {
     target,

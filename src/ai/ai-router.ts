@@ -1,4 +1,4 @@
-import type { AIProvider, TriageOutput, SynthesisOutput } from './ai-provider.js';
+import type { AIProvider, TriageOutput, SynthesisOutput, ConsultOutput } from './ai-provider.js';
 import type { DedupedFinding } from '../core/deduplicator.js';
 import { createHash } from 'node:crypto';
 
@@ -55,8 +55,18 @@ export class AIRouter {
     return this.synthesisProvider.synthesize(findings);
   }
 
+  /** Interactive consultation routed to the synthesis (powerful) provider. */
+  async consult(question: string, findings: DedupedFinding[]): Promise<ConsultOutput> {
+    return this.synthesisProvider.consult(question, findings);
+  }
+
   /** Exposed for testing / inspection. */
   getCacheSize(): number {
     return this.triageCache.size;
+  }
+
+  /** Provider ids of the active triage and synthesis providers. */
+  getProviderIds(): [string, string] {
+    return [this.triageProvider.id, this.synthesisProvider.id];
   }
 }

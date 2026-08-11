@@ -147,7 +147,7 @@ describe('parseLexisrc', () => {
           admin: { type: 'bearer', token: '${LEXIS_ADMIN_TOKEN}', role: 'admin', owns: [] }
         }
       },
-      ai: { provider: 'ollama' }
+      ai: { provider: 'openai' }
     };
 
     const result = parseLexisrc(JSON.stringify(minimal));
@@ -156,6 +156,8 @@ describe('parseLexisrc', () => {
     expect(result.data.mode).toBe('safe');
     expect(result.data.ai.redact_target).toBe(true);
     expect(result.data.ai.local_fallback).toBe(false);
+    expect(result.data.ai.model).toBe('gpt-5.4-nano');
+    expect(result.data.ai.api_key).toBe('');
     expect(result.data.limits.max_concurrent_requests).toBe(20);
     expect(result.data.limits.max_requests_per_test).toBe(500);
     expect(result.data.limits.abort_on_latency_degradation_pct).toBe(40);
@@ -170,7 +172,7 @@ describe('parseLexisrc', () => {
   });
 
   it('returns error on unknown ai provider', () => {
-    const cfg = { ...validConfig, ai: { ...validConfig.ai, provider: 'openai' } };
+    const cfg = { ...validConfig, ai: { ...validConfig.ai, provider: 'azure' } };
     const result = parseLexisrc(JSON.stringify(cfg));
     expect(result.ok).toBe(false);
     if (result.ok) return;

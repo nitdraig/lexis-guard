@@ -1,4 +1,4 @@
-import type { AIProvider, TriageOutput, SynthesisOutput } from './ai-provider.js';
+import type { AIProvider, TriageOutput, SynthesisOutput, ConsultOutput } from './ai-provider.js';
 import type { DedupedFinding } from '../core/deduplicator.js';
 
 /**
@@ -7,6 +7,12 @@ import type { DedupedFinding } from '../core/deduplicator.js';
  */
 export class LocalProvider implements AIProvider {
   readonly id = 'local';
+
+  // lexis: negative list on the offline fallback; the real guardrail lives in
+  // the cloud provider system prompt. Declines clearly-off-topic questions so
+  // the stub behaves like the persona even without a model.
+  private static readonly OFF_TOPIC
+    = /\b(recipe|weather|forecast|sports?|travel|vacation|movie|film|music|joke|poem|story|cooking|translate|translation|politics|what is your name|who (is|was))\b/i;
 
   async triage(findings: DedupedFinding[]): Promise<TriageOutput> {
     return {
@@ -31,6 +37,33 @@ export class LocalProvider implements AIProvider {
         rationale: f.description
       })),
       overall_posture: hasCritical ? 'critical' : hasHigh ? 'needs_attention' : 'healthy'
+    };
+  }
+
+  async consult(question: string, findings: DedupedFinding[]): Promise<ConsultOutput> {
+    if (LocalProvider.OFF_TOPIC.test(question)) {
+      return {
+        answer:
+          'lexis-guard is scoped to API cybersecurity and API performance. ' +
+          'I can only help with questions about API security and performance.'
+      };
+    }
+    const topRisks = findings
+      .filter((f) => f.worst_case === 'high' || f.worst_case === 'critical')
+      .slice(0, 3);
+    const topText =
+      topRisks.length > 0
+        ? topRisks.map((f) => `${f.rule_id} (${f.worst_case})`).join(', ')
+        : 'no high-risk findings';
+
+    return {
+      answer: [
+        `Question: ${question}`,
+        `Analysis of ${findings.length} unique findings. Top risks (${findings.length ? topText : 'n/a'}).`,
+        topRisks.length > 0
+          ? 'Recommendation: fix the high/critical findings first, in the order listed.'
+          : 'Current posture has no high risks; still review the low/medium findings.'
+      ].join('\n')
     };
   }
 }

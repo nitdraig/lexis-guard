@@ -1,7 +1,24 @@
 import { render } from 'ink';
-import { AuditApp } from './app.js';
-import type { Lexisrc } from '../config/lexisrc-schema.js';
+import { App } from './app.js';
+import type { RawLexisrc } from '../config/lexisrc-schema.js';
 
-export function startTUI(target: string, config: Lexisrc): void {
-  render(<AuditApp target={target} config={config} />);
+/**
+ * Start the multi-view TUI workbench. Returns a promise that resolves
+ * when the user quits (Quit menu item or Ctrl+C).
+ */
+export async function startTUI(options?: {
+  target?: string | null;
+  rawConfig?: RawLexisrc | null;
+  configPath?: string | null;
+  onQuit?: () => void;
+}): Promise<void> {
+  const app = render(
+    <App
+      initialRawConfig={options?.rawConfig ?? null}
+      initialConfigPath={options?.configPath ?? null}
+      initialTarget={options?.target ?? null}
+      onQuit={options?.onQuit}
+    />
+  );
+  await app.waitUntilExit();
 }

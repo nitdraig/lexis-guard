@@ -4,6 +4,7 @@ import {
   type Lexisrc,
   lexisrcSchema
 } from './lexisrc-schema.js';
+import { defaultModel } from '../ai/models.js';
 
 /**
  * Result of parsing `.lexisrc.json`.
@@ -130,7 +131,13 @@ export function parseLexisrc(content: string | unknown): ParseLexisrcResult {
       auth: {
         profiles: resolveAuthProfiles(parsed.data.auth.profiles)
       },
-      ai: parsed.data.ai,
+      ai: {
+        provider: parsed.data.ai.provider,
+        redact_target: parsed.data.ai.redact_target,
+        local_fallback: parsed.data.ai.local_fallback,
+        model: parsed.data.ai.model ?? defaultModel(parsed.data.ai.provider),
+        api_key: parsed.data.ai.api_key ?? ''
+      },
       limits: parsed.data.limits
     };
   } catch (err) {

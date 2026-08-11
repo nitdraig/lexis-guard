@@ -1,6 +1,9 @@
+#!/usr/bin/env node
+import 'dotenv/config';
 import { Command } from '@commander-js/extra-typings';
-import { loadConfig } from './config/loader.js';
+import { loadConfig, loadRawConfig } from './config/loader.js';
 import { parseLexisrcStrict } from './config/lexisrc-parser.js';
+import { defaultRawLexisrc } from './config/default.js';
 import { validateScope } from './core/scope-guard.js';
 import { HttpEngine } from './core/http-engine.js';
 import { SecurityModule } from './modules/security-module.js';
@@ -11,27 +14,25 @@ import { Sanitizer } from './core/sanitizer.js';
 import { JsonReporter } from './reporter/json-reporter.js';
 import { MarkdownReporter } from './reporter/markdown-reporter.js';
 import { SarifReporter } from './reporter/sarif-reporter.js';
-import { LocalProvider } from './ai/local-provider.js';
-import { AIRouter } from './ai/ai-router.js';
+import { createAIRouter } from './ai/factory.js';
 import { AuditLog } from './core/audit-log.js';
-import { runWizard } from './wizard.js';
 import { startTUI } from './tui/index.js';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const program = new Command()
-  .name('lexisguard')
-  .description('Orchestrator TUI de auditoria automatizada para APIs')
+  .name('lexisg')
+  .description('Automated API security, performance and scalability auditing orchestrator')
   .version('0.1.0')
-  .option('-c, --config <path>', 'ruta al archivo de configuracion')
-  .option('-m, --mode <mode>', 'modo de ejecucion: safe o aggressive')
-  .option('-t, --target <url>', 'URL base del API a auditar')
-  .option('-s, --spec <path>', 'ruta o URL al spec OpenAPI/Swagger')
-  .option('-f, --format <format>', 'formato de reporte: json, md, sarif', 'json')
-  .option('-o, --output <path>', 'ruta de salida del reporte')
-  .option('--json', 'salida JSON a stdout (alias de --format json --output -)')
-  .option('--tui', 'modo dashboard interactivo en terminal')
-  .option('--threshold <score>', 'puntuacion CVSS minima para exit code 1', '7.0')
+  .option('-c, --config <path>', 'path to the configuration file')
+  .option('-m, --mode <mode>', 'execution mode: safe or aggressive')
+  .option('-t, --target <url>', 'base URL of the API to audit (one-shot)')
+  .option('-s, --spec <path>', 'path or URL to an OpenAPI/Swagger spec')
+  .option('-f, --format <format>', 'report format: json, md, sarif', 'json')
+  .option('-o, --output <path>', 'output path for the report')
+  .option('--json', 'JSON output to stdout (alias for --format json --output -)')
+  .option('--tui', 'open the interactive workbench (multi-screen)')
+  .option('--threshold <score>', 'minimum CVSS score for exit code 1', '7.0')
   .parse();
 
 const options = program.opts();
@@ -39,27 +40,36 @@ const options = program.opts();
 async function main(): Promise<number> {
   const t0 = Date.now();
 
-  // Detectar modo interactivo si no hay target
-  let target: string;
-  let config: Awaited<ReturnType<typeof loadConfig>>;
-  let modeOverride: 'safe' | 'aggressive' | undefined;
-  let format: 'json' | 'md' | 'sarif' = (options.format as 'json' | 'md' | 'sarif') ?? 'json';
-  let outputPath: string | undefined = options.output;
-
-  if (!options.target) {
-    const wizard = await runWizard();
-    if (!wizard) return 1;
-    target = wizard.target;
-    config = wizard.config;
-    modeOverride = wizard.mode;
-    format = wizard.format;
-    outputPath = wizard.output;
-  } else {
-    config = loadConfig(options.config);
-    target = options.target;
-    modeOverride = options.mode as 'safe' | 'aggressive' | undefined;
+  // Workbench TUI: sin flags o con --tui (con target opcional preseleccionado)
+  const workbench = options.tui || !options.target;
+  if (workbench) {
+    if (!process.stdin.isTTY) {
+      console.error('The interactive workbench requires a terminal. Use --target for a one-shot audit.');
+      return 2;
+    }
+    let rawConfig;
+    let configPath: string | null = null;
+    try {
+      rawConfig = loadRawConfig(options.config);
+      configPath = options.config ?? null;
+    } catch {
+      rawConfig = defaultRawLexisrc();
+    }
+    await startTUI({
+      target: options.target,
+      rawConfig,
+      configPath
+    });
+    return 0;
   }
 
+  // One-shot audit (CI-friendly)
+  let target = options.target as string;
+  let config = loadConfig(options.config);
+  const format: 'json' | 'md' | 'sarif' = (options.format as 'json' | 'md' | 'sarif') ?? 'json';
+  const outputPath: string | undefined = options.output;
+
+  const modeOverride = options.mode as 'safe' | 'aggressive' | undefined;
   if (modeOverride) {
     config = parseLexisrcStrict({ ...config, mode: modeOverride });
   }
@@ -69,12 +79,6 @@ async function main(): Promise<number> {
   if (!scopeResult.ok) {
     console.error(`Error: ${scopeResult.reason}`);
     return 1;
-  }
-
-  // TUI mode
-  if (options.tui) {
-    startTUI(target, config);
-    return 0;
   }
 
   // Engine
@@ -94,7 +98,7 @@ async function main(): Promise<number> {
       const findings = await mod.run(target, config, engine);
       allFindings.push(...findings);
     } catch (err) {
-      console.error(`Error en modulo ${mod.id}:`, err instanceof Error ? err.message : err);
+      console.error(`Error in module ${mod.id}:`, err instanceof Error ? err.message : err);
     }
   }
 
@@ -104,7 +108,7 @@ async function main(): Promise<number> {
   const sanitized = deduped.map((f) => sanitizer.sanitizeFinding(f));
 
   // IA
-  const aiRouter = new AIRouter(new LocalProvider(), new LocalProvider());
+  const aiRouter = createAIRouter(config.ai);
   await aiRouter.triage(sanitized);
   const synthesis = await aiRouter.synthesize(sanitized);
 
@@ -133,14 +137,14 @@ async function main(): Promise<number> {
 
   if (outputPath && outputPath !== '-') {
     writeFileSync(resolve(outputPath), report, 'utf-8');
-    console.log(`Reporte guardado en ${outputPath}`);
+    console.log(`Report saved to ${outputPath}`);
   } else {
     console.log(report);
   }
 
   // Resumen
-  console.error(`\nLexisGuard completado en ${(meta.durationMs / 1000).toFixed(1)}s`);
-  console.error(`Findings: ${sanitized.length} | Postura: ${synthesis.overall_posture}`);
+  console.error(`\nLexisGuard finished in ${(meta.durationMs / 1000).toFixed(1)}s`);
+  console.error(`Findings: ${sanitized.length} | Posture: ${synthesis.overall_posture}`);
 
   // Audit log
   const auditLog = new AuditLog();
@@ -164,6 +168,6 @@ async function main(): Promise<number> {
 main()
   .then((code) => process.exit(code))
   .catch((err) => {
-    console.error('Error fatal:', err instanceof Error ? err.message : err);
+    console.error('Fatal error:', err instanceof Error ? err.message : err);
     process.exit(1);
   });

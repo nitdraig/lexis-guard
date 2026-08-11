@@ -39,6 +39,16 @@ export const synthesisOutputSchema = z.object({
 export type SynthesisOutput = z.infer<typeof synthesisOutputSchema>;
 
 /**
+ * Structured output schema for interactive consultation.
+ * The user asks a question about findings and gets a plain-text answer.
+ */
+export const consultOutputSchema = z.object({
+  answer: z.string().min(1)
+});
+
+export type ConsultOutput = z.infer<typeof consultOutputSchema>;
+
+/**
  * AI Provider interface.
  * Implementations: LocalProvider (Ollama stub), AnthropicProvider, GeminiProvider.
  */
@@ -50,4 +60,7 @@ export interface AIProvider {
 
   /** Level B — Synthesis: executive summary and prioritization. Low frequency. */
   synthesize(findings: DedupedFinding[]): Promise<SynthesisOutput>;
+
+  /** Interactive: answer a user question about the given findings. */
+  consult(question: string, findings: DedupedFinding[]): Promise<ConsultOutput>;
 }

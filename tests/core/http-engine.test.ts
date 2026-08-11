@@ -43,7 +43,20 @@ describe('HttpEngine', () => {
     expect(JSON.parse(response.body)).toEqual({ path: '/test', method: 'GET' });
     expect(response.latency.total).toBeGreaterThanOrEqual(0);
     expect(response.latency.ttfb).toBeGreaterThanOrEqual(0);
+    expect(engine.getRequestCount()).toBe(1);
 
+    await engine.close();
+  });
+
+  it('accepts a hostname-only baseUrl (normalized to https)', async () => {
+    const engine = new HttpEngine({
+      baseUrl: 'example.com',
+      concurrency: 5,
+      latencyThresholdMs: 1000,
+      abortOnDegradationPct: 40
+    });
+
+    expect(engine.getThrottleState()).toBe('normal');
     await engine.close();
   });
 

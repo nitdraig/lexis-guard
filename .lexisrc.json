@@ -1,0 +1,52 @@
+{
+  "scope": {
+    "allowed_targets": [
+      "api.staging.empresa.com",
+      "api.mailprex.excelso.xyz",
+      "api2.staging.empresa.com",
+      "api.flowfolio.space"
+    ],
+    "environment": "staging"
+  },
+  "mode": "safe",
+  "auth": {
+    "profiles": {
+      "user_a": {
+        "type": "bearer",
+        "token": "${LEXIS_USER_A_TOKEN}",
+        "role": "standard",
+        "owns": [
+          "order:1001",
+          "profile:1001"
+        ]
+      },
+      "user_b": {
+        "type": "bearer",
+        "token": "${LEXIS_USER_B_TOKEN}",
+        "role": "standard",
+        "owns": [
+          "order:2001",
+          "profile:2001"
+        ]
+      },
+      "admin": {
+        "type": "bearer",
+        "token": "${LEXIS_ADMIN_TOKEN}",
+        "role": "admin",
+        "owns": []
+      }
+    }
+  },
+  "ai": {
+    "provider": "openai",
+    "redact_target": true,
+    "local_fallback": false,
+    "model": "gpt-5.4-nano",
+    "api_key": "enc:yR5OKC6D3gLyBL5gJqkuaLbhkFE4/V8uD/bTtOCmJjqzmIoHD1slK1BFn3AW5UH0Fh9I1VISWfWT8KwGjcO0ZJNdzuyt6f3xF1LyX8uXMHeQxhgW/+lATvP8ITYQZczeEv4BKWa1jJHQCiXPvgk0kB8tcSi7yZ2CfvqJQNE4YLxeu06CrlmkVdd4nQPUonDzvgVAkIP+3vnGDB0U4l9rr3E0aiq4ab7/EB+kZhfA6Ox7gvEsBHFmVLm4UhrrfWMA"
+  },
+  "limits": {
+    "max_concurrent_requests": 20,
+    "max_requests_per_test": 500,
+    "abort_on_latency_degradation_pct": 40
+  }
+}

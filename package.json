@@ -7,6 +7,7 @@
     "node": ">=20.0.0"
   },
   "bin": {
+    "lexisg-cli": "./dist/cli.js",
     "lexisguard": "./dist/cli.js"
   },
   "scripts": {
@@ -16,14 +17,19 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.37",
+    "@ai-sdk/deepseek": "^3.0.27",
+    "@ai-sdk/openai": "^4.0.38",
     "@apidevtools/swagger-parser": "^12.1.0",
     "@clack/prompts": "^1.7.0",
     "@commander-js/extra-typings": "^15.0.0",
     "@inkjs/ui": "^2.0.0",
     "@types/react": "^19.2.18",
     "ai": "^7.0.59",
+    "cfonts": "^3.3.1",
     "cockatiel": "^4.0.0",
     "cosmiconfig": "^9.0.2",
+    "dotenv": "^17.4.2",
     "ink": "^7.1.1",
     "ollama-ai-provider": "^1.2.0",
     "p-limit": "^7.3.1",
@@ -44,5 +50,5 @@
     "dast",
     "owasp"
   ],
-  "license": "MIT"
+  "license": "PolyForm-Noncommercial-1.0.0"
 }

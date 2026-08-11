@@ -44,36 +44,41 @@ export class SecurityModule implements AuditModule {
   readonly id = 'security';
   readonly name = 'Security';
 
-  async run(_target: string, _config: Lexisrc, engine: HttpEngine): Promise<Finding[]> {
+  async run(_target: string, _config: Lexisrc, engine: HttpEngine, onFinding?: (f: Finding) => void): Promise<Finding[]> {
     const findings: Finding[] = [];
+    // Stream each finding to the UI the moment it is detected.
+    const track = (f: Finding): void => {
+      findings.push(f);
+      onFinding?.(f);
+    };
 
     // 1. Basic headers on root
     const root = await engine.fetch('/', 'GET');
     const headers = root.headers;
 
     if (!headerValue(headers, 'strict-transport-security')) {
-      findings.push(
+      track(
         finding('MISSING_HSTS', 'GET', '/', 'Missing Strict-Transport-Security header', 'medium',
           'HSTS header not present in response', 'CWE-319', 5.3)
       );
     }
 
     if (!headerValue(headers, 'x-frame-options')) {
-      findings.push(
+      track(
         finding('MISSING_X_FRAME_OPTIONS', 'GET', '/', 'Missing X-Frame-Options header', 'medium',
           'Clickjacking protection absent', 'CWE-1021', 5.3)
       );
     }
 
     if (!headerValue(headers, 'x-content-type-options')) {
-      findings.push(
+      track(
         finding('MISSING_X_CONTENT_TYPE_OPTIONS', 'GET', '/', 'Missing X-Content-Type-Options header', 'low',
           'MIME-sniffing not disabled', 'CWE-693', 3.7)
       );
     }
 
     if (!headerValue(headers, 'content-security-policy')) {
-      findings.push(
+      track(
         finding('MISSING_CSP', 'GET', '/', 'Missing Content-Security-Policy header', 'medium',
           'CSP not configured', 'CWE-693', 5.3)
       );
@@ -81,7 +86,7 @@ export class SecurityModule implements AuditModule {
 
     const cors = headerValue(headers, 'access-control-allow-origin');
     if (cors === '*') {
-      findings.push(
+      track(
         finding('CORS_WILD_CARD', 'GET', '/', 'CORS allows any origin', 'high',
           'Access-Control-Allow-Origin: *', 'CWE-942', 7.5)
       );
@@ -90,7 +95,7 @@ export class SecurityModule implements AuditModule {
     const server = headerValue(headers, 'server');
     const poweredBy = headerValue(headers, 'x-powered-by');
     if (server || poweredBy) {
-      findings.push(
+      track(
         finding('STACK_LEAK', 'GET', '/', 'Server stack information leaked', 'low',
           `Server: ${server ?? 'n/a'}, X-Powered-By: ${poweredBy ?? 'n/a'}`, 'CWE-200', 3.7)
       );
@@ -102,7 +107,7 @@ export class SecurityModule implements AuditModule {
       try {
         const resp = await engine.fetch(path, 'HEAD');
         if (resp.statusCode === 200) {
-          findings.push(
+          track(
             finding('SENSITIVE_FILE_EXPOSURE', 'HEAD', path, `Sensitive file exposed: ${path}`, 'high',
               `HEAD ${path} returned 200 OK`, 'CWE-538', 7.5)
           );
@@ -115,7 +120,7 @@ export class SecurityModule implements AuditModule {
     // 3. JWT detection in response (passive)
     const setCookie = headerValue(headers, 'set-cookie');
     if (setCookie && /jwt|token|auth/i.test(setCookie)) {
-      findings.push(
+      track(
         finding('JWT_IN_COOKIE', 'GET', '/', 'JWT or auth token detected in cookie', 'info',
           `Set-Cookie contains token-like value: ${setCookie.slice(0, 40)}...`, 'CWE-522', 2.0)
       );
@@ -123,10 +128,10 @@ export class SecurityModule implements AuditModule {
 
     // 4. BOLA / BFLA — cross-auth authorization tests
     const bolaFindings = await testBOLA(_target, _config, engine);
-    findings.push(...bolaFindings);
+    for (const f of bolaFindings) track(f);
 
     const bflaFindings = await testBFLA(_target, _config, engine);
-    findings.push(...bflaFindings);
+    for (const f of bflaFindings) track(f);
 
     return findings;
   }

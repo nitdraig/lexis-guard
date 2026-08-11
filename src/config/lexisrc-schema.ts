@@ -3,7 +3,7 @@ import { z } from 'zod';
 const authTypeSchema = z.enum(['bearer', 'api_key', 'basic']);
 const roleSchema = z.enum(['standard', 'admin']);
 const modeSchema = z.enum(['safe', 'aggressive']);
-const aiProviderSchema = z.enum(['anthropic', 'gemini', 'ollama']);
+const aiProviderSchema = z.enum(['openai', 'deepseek', 'anthropic', 'ollama', 'lmstudio']);
 
 /**
  * Raw profile as it appears in JSON (token may contain ${ENV_VAR}).
@@ -47,7 +47,9 @@ export const rawLexisrcSchema = z.object({
   ai: z.object({
     provider: aiProviderSchema,
     redact_target: z.boolean().default(true),
-    local_fallback: z.boolean().default(false)
+    local_fallback: z.boolean().default(false),
+    model: z.string().min(1).optional(),
+    api_key: z.string().optional()
   }),
   limits: z.object({
     max_concurrent_requests: z.number().int().positive().default(20),
@@ -77,7 +79,9 @@ export const lexisrcSchema = z.object({
   ai: z.object({
     provider: aiProviderSchema,
     redact_target: z.boolean(),
-    local_fallback: z.boolean()
+    local_fallback: z.boolean(),
+    model: z.string().min(1),
+    api_key: z.string()
   }),
   limits: z.object({
     max_concurrent_requests: z.number().int().positive(),

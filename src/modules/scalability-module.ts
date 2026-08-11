@@ -34,8 +34,13 @@ export class ScalabilityModule implements AuditModule {
   readonly id = 'scalability';
   readonly name = 'Scalability';
 
-  async run(_target: string, config: Lexisrc, engine: HttpEngine): Promise<Finding[]> {
+  async run(_target: string, config: Lexisrc, engine: HttpEngine, onFinding?: (f: Finding) => void): Promise<Finding[]> {
     const findings: Finding[] = [];
+    // Stream each finding to the UI the moment it is detected.
+    const track = (f: Finding): void => {
+      findings.push(f);
+      onFinding?.(f);
+    };
     const maxRequests = config.limits.max_requests_per_test;
 
     // 1. Rate limiting detection: burst 10 rapid requests
@@ -53,12 +58,12 @@ export class ScalabilityModule implements AuditModule {
 
     const rateLimited = responses.filter((s) => s === 429).length;
     if (rateLimited === 0) {
-      findings.push(
+      track(
         finding('NO_RATE_LIMIT', 'GET', '/', 'No rate limiting detected on burst', 'medium',
           `Burst of ${burstSize} requests: no 429 responses`, 'CWE-770', 5.3)
       );
     } else {
-      findings.push(
+      track(
         finding('RATE_LIMIT_DETECTED', 'GET', '/', 'Rate limiting present', 'info',
           `${rateLimited}/${burstSize} requests returned 429`, undefined, 1.0)
       );
@@ -80,7 +85,7 @@ export class ScalabilityModule implements AuditModule {
 
     const errors = soakStatuses.filter((s) => s >= 500 || s === 0).length;
     if (errors > 0) {
-      findings.push(
+      track(
         finding('SOAK_TEST_FAILURES', 'GET', '/', 'Errors during sustained load', 'high',
           `${errors}/${soakRequests} requests failed (5xx or timeout)`, 'CWE-400', 6.5)
       );
@@ -89,12 +94,12 @@ export class ScalabilityModule implements AuditModule {
     // 3. Throttle state observation
     const state = engine.getThrottleState();
     if (state === 'throttle') {
-      findings.push(
+      track(
         finding('LATENCY_THROTTLE_TRIGGERED', 'GET', '/', 'Engine throttled due to latency', 'medium',
           'ThrottleController switched to throttle state', undefined, 4.0)
       );
     } else if (state === 'abort') {
-      findings.push(
+      track(
         finding('CIRCUIT_BREAKER_ABORTED', 'GET', '/', 'Circuit breaker aborted the test', 'critical',
           'ThrottleController switched to abort state — partial report', undefined, 8.0)
       );
