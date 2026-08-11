@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/lexisguard/cli/main/schemas/lexisrc.json",
+  "scope": {
+    "allowed_targets": [
+      "api.staging.empresa.com",
+      "api2.staging.empresa.com"
+    ],
+    "environment": "staging"
+  },
+  "mode": "safe",
+  "auth": {
+    "profiles": {
+      "user_a": {
+        "type": "bearer",
+        "token": "${LEXIS_USER_A_TOKEN}",
+        "role": "standard",
+        "owns": [
+          "order:1001",
+          "profile:1001"
+        ]
+      },
+      "user_b": {
+        "type": "bearer",
+        "token": "${LEXIS_USER_B_TOKEN}",
+        "role": "standard",
+        "owns": [
+          "order:2001",
+          "profile:2001"
+        ]
+      },
+      "admin": {
+        "type": "bearer",
+        "token": "${LEXIS_ADMIN_TOKEN}",
+        "role": "admin",
+        "owns": []
+      }
+    }
+  },
+  "ai": {
+    "provider": "anthropic",
+    "redact_target": true,
+    "local_fallback": false
+  },
+  "limits": {
+    "max_concurrent_requests": 20,
+    "max_requests_per_test": 500,
+    "abort_on_latency_degradation_pct": 40
+  }
+}

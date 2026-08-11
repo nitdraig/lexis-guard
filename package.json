@@ -1,0 +1,48 @@
+{
+  "name": "lexisguard-cli",
+  "version": "0.1.0",
+  "description": "Orchestrator TUI de auditoria automatizada para APIs",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "lexisguard": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
+    "@clack/prompts": "^1.7.0",
+    "@commander-js/extra-typings": "^15.0.0",
+    "@inkjs/ui": "^2.0.0",
+    "@types/react": "^19.2.18",
+    "ai": "^7.0.59",
+    "cockatiel": "^4.0.0",
+    "cosmiconfig": "^9.0.2",
+    "ink": "^7.1.1",
+    "ollama-ai-provider": "^1.2.0",
+    "p-limit": "^7.3.1",
+    "react": "^19.2.8",
+    "undici": "^6.19.8",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "msw": "^2.3.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "keywords": [
+    "api-security",
+    "audit",
+    "cli",
+    "dast",
+    "owasp"
+  ],
+  "license": "MIT"
+}

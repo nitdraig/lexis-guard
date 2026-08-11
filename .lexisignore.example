@@ -1,0 +1,22 @@
+{
+  "ignore": [
+    {
+      "hash": "a1b2c3d4e5f6",
+      "rule_id": "CORS_WILD_CARD",
+      "path": "/api/v1/public-data",
+      "method": "GET",
+      "reason": "Endpoint publico por diseno",
+      "approved_by": "agustin@empresa.com",
+      "expires": "2026-12-31"
+    },
+    {
+      "hash": "b2c3d4e5f6a7",
+      "rule_id": "STACK_LEAK",
+      "path": "/health",
+      "method": "GET",
+      "reason": "Health check interno, no expone datos sensibles",
+      "approved_by": "ops@empresa.com",
+      "expires": "2026-06-30"
+    }
+  ]
+}
