@@ -31,7 +31,6 @@
     "cosmiconfig": "^9.0.2",
     "dotenv": "^17.4.2",
     "ink": "^7.1.1",
-    "ollama-ai-provider": "^1.2.0",
     "p-limit": "^7.3.1",
     "react": "^19.2.8",
     "undici": "^6.19.8",
@@ -41,7 +40,7 @@
     "@types/node": "^20.14.0",
     "msw": "^2.3.0",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "vitest": "^4.1.10"
   },
   "keywords": [
     "api-security",

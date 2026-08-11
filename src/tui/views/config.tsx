@@ -34,6 +34,8 @@ export function isValidTarget(input: string): boolean {
   if (!/^https?:\/\//i.test(input)) hostname = `https://${input}`;
   try {
     const url = new URL(hostname);
+    // lexis: reject URLs with userinfo (user:pass@host) to prevent hostname confusion attacks
+    if (url.username || url.password) return false;
     return url.hostname.includes('.') && url.protocol === 'https:';
   } catch {
     return false;

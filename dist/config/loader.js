@@ -20,10 +20,7 @@ export function loadRawConfig(configPath) {
             `.${moduleName}rc.json`,
             `.${moduleName}rc.yaml`,
             `.${moduleName}rc.yml`,
-            `.${moduleName}rc.js`,
-            `.${moduleName}rc.cjs`,
-            `${moduleName}.config.js`,
-            `${moduleName}.config.cjs`,
+            // lexis: .js/.cjs config files are excluded to prevent RCE via cosmiconfig require()
             'package.json'
         ]
     });
