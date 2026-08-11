@@ -1,4 +1,1 @@
-# Taste (Continuously Learned by [CommandCode][cmd])
-
-[cmd]: https://commandcode.ai/
-
+- Prefiere comunicarse en español (español informal, sin tildes). Confidence: 0.8
