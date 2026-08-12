@@ -1,0 +1,6 @@
+node_modules
+.env
+.lexisrc.json
+/dist
+/burbot
+/new-features
