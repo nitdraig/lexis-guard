@@ -1,7 +1,7 @@
 {
   "name": "lexisguard-cli",
   "version": "0.1.0",
-  "description": "Orchestrator TUI de auditoria automatizada para APIs",
+  "description": "Automated API security, performance and scalability auditing workbench and one-shot CLI",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"

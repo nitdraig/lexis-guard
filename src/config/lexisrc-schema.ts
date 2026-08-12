@@ -3,6 +3,7 @@ import { z } from 'zod';
 const authTypeSchema = z.enum(['bearer', 'api_key', 'basic']);
 const roleSchema = z.enum(['standard', 'admin']);
 const modeSchema = z.enum(['safe', 'aggressive']);
+const profileSchema = z.enum(['quick', 'deep']);
 const aiProviderSchema = z.enum(['openai', 'deepseek', 'anthropic', 'ollama', 'lmstudio']);
 
 /**
@@ -38,6 +39,7 @@ export const rawLexisrcSchema = z.object({
     environment: z.string().min(1)
   }),
   mode: modeSchema.default('safe'),
+  profile: profileSchema.default('deep'),
   auth: z.object({
     profiles: z.record(z.string().min(1), rawAuthProfileSchema)
       .refine((profiles) => Object.keys(profiles).length >= 1, {
@@ -73,6 +75,7 @@ export const lexisrcSchema = z.object({
     environment: z.string().min(1)
   }),
   mode: modeSchema,
+  profile: profileSchema,
   auth: z.object({
     profiles: z.record(z.string().min(1), authProfileSchema)
   }),

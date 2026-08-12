@@ -8,6 +8,7 @@ function makeConfig(
   return {
     scope: { allowed_targets: ['api.empresa.com'], environment: 'staging' },
     mode: 'safe',
+    profile: 'deep',
     auth: { profiles },
     ai: { provider: 'anthropic', redact_target: true, local_fallback: false },
     limits: { max_concurrent_requests: 20, max_requests_per_test: 500, abort_on_latency_degradation_pct: 40 }

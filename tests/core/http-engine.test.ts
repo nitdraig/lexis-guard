@@ -107,4 +107,45 @@ describe('HttpEngine', () => {
     await engine.abort();
     await expect(engine.fetch('/test', 'GET')).rejects.toThrow('Engine aborted');
   });
+
+  it('throttle reduces the concurrency limit (Phase C)', async () => {
+    const engine = new HttpEngine({
+      baseUrl,
+      concurrency: 10,
+      latencyThresholdMs: 50,
+      abortOnDegradationPct: 1000 // no abort, only throttle
+    });
+
+    expect(engine.getConcurrencyLimit()).toBe(10);
+
+    // Slow requests push p95 over the threshold -> throttle halves concurrency.
+    for (let i = 0; i < 9; i++) {
+      await engine.fetch('/slow', 'GET', { 'x-delay': '100' });
+    }
+    expect(engine.getThrottleState()).toBe('throttle');
+    expect(engine.getConcurrencyLimit()).toBe(5);
+
+    // The active limiter is recreated at the reduced limit; new requests use it.
+    const response = await engine.fetch('/after-throttle', 'GET');
+    expect(response.statusCode).toBe(200);
+
+    await engine.close();
+  });
+
+  it('enforces max_requests_per_test as a hard ceiling', async () => {
+    const engine = new HttpEngine({
+      baseUrl,
+      concurrency: 5,
+      latencyThresholdMs: 1000,
+      abortOnDegradationPct: 40,
+      maxRequests: 2
+    });
+
+    expect((await engine.fetch('/a', 'GET')).statusCode).toBe(200);
+    expect((await engine.fetch('/b', 'GET')).statusCode).toBe(200);
+    await expect(engine.fetch('/c', 'GET')).rejects.toThrow('max_requests_per_test reached');
+    expect(engine.getRequestCount()).toBe(2);
+
+    await engine.close();
+  });
 });

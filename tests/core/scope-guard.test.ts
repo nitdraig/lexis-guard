@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { validateScope } from '../../src/core/scope-guard.js';
+import { validateScope, canonicalizeTarget } from '../../src/core/scope-guard.js';
 import type { Lexisrc } from '../../src/config/lexisrc-schema.js';
 
 function makeConfig(targets: string[]): Lexisrc {
   return {
     scope: { allowed_targets: targets, environment: 'staging' },
     mode: 'safe',
+    profile: 'deep',
     auth: {
       profiles: {
         a: { type: 'bearer', token: 't', role: 'standard', owns: ['r:1'] },
@@ -59,5 +60,29 @@ describe('validateScope', () => {
   it('allows any of multiple targets', () => {
     const cfg = makeConfig(['api.empresa.com', 'api2.empresa.com']);
     expect(validateScope('api2.empresa.com', cfg).ok).toBe(true);
+  });
+});
+
+describe('canonicalizeTarget', () => {
+  it('adds https scheme to a bare hostname', () => {
+    const result = canonicalizeTarget('api.empresa.com');
+    expect(result).toEqual({ ok: true, url: 'https://api.empresa.com' });
+  });
+
+  it('keeps an existing scheme', () => {
+    const result = canonicalizeTarget('http://api.empresa.com');
+    expect(result).toEqual({ ok: true, url: 'http://api.empresa.com' });
+  });
+
+  it('drops path and query, keeping the origin', () => {
+    const result = canonicalizeTarget('https://api.empresa.com/v1/users?id=1');
+    expect(result).toEqual({ ok: true, url: 'https://api.empresa.com' });
+  });
+
+  it('rejects an invalid URL', () => {
+    const result = canonicalizeTarget('ht!tp://bad[url');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain('Invalid target URL');
   });
 });

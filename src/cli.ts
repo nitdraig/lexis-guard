@@ -3,19 +3,21 @@ import 'dotenv/config';
 import { Command } from '@commander-js/extra-typings';
 import { loadConfig, loadRawConfig } from './config/loader.js';
 import { parseLexisrcStrict } from './config/lexisrc-parser.js';
+import { loadLexisignore } from './config/lexisignore-loader.js';
 import { defaultRawLexisrc } from './config/default.js';
-import { validateScope } from './core/scope-guard.js';
+import { validateScope, canonicalizeTarget } from './core/scope-guard.js';
 import { HttpEngine } from './core/http-engine.js';
+import { discoverEndpoints, type Endpoint } from './openapi/parser.js';
 import { SecurityModule } from './modules/security-module.js';
 import { PerformanceModule } from './modules/performance-module.js';
 import { ScalabilityModule } from './modules/scalability-module.js';
-import { deduplicate } from './core/deduplicator.js';
-import { Sanitizer } from './core/sanitizer.js';
+import { runAuditPipeline } from './core/audit-pipeline.js';
+import { resolveAuthProfiles } from './core/auth-guard.js';
 import { JsonReporter } from './reporter/json-reporter.js';
 import { MarkdownReporter } from './reporter/markdown-reporter.js';
 import { SarifReporter } from './reporter/sarif-reporter.js';
-import { createAIRouter } from './ai/factory.js';
 import { AuditLog } from './core/audit-log.js';
+import { computeTrend } from './core/trending.js';
 import { startTUI } from './tui/index.js';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -81,13 +83,51 @@ async function main(): Promise<number> {
     return 1;
   }
 
+  // Canonicalize once; the engine and every module share the absolute URL.
+  const canonical = canonicalizeTarget(target);
+  if (!canonical.ok) {
+    console.error(`Error: ${canonical.reason}`);
+    return 1;
+  }
+  const baseUrl = canonical.url;
+
+  // Auth Guard: BOLA/BFLA prerequisites. Not fatal — the cross-auth module
+  // skips those checks on its own; the warning surfaces why they are absent.
+  const authResult = resolveAuthProfiles(config);
+  if (!authResult.ok) {
+    console.error(`Warning: ${authResult.errors.join(' ')}`);
+  }
+
   // Engine
   const engine = new HttpEngine({
-    baseUrl: target,
+    baseUrl,
     concurrency: config.limits.max_concurrent_requests,
     latencyThresholdMs: 1000,
-    abortOnDegradationPct: config.limits.abort_on_latency_degradation_pct
+    abortOnDegradationPct: config.limits.abort_on_latency_degradation_pct,
+    maxRequests: config.limits.max_requests_per_test
   });
+
+  // OpenAPI discovery — the spec drives which paths get probed.
+  let endpoints: Endpoint[] | undefined;
+  if (options.spec) {
+    if (/^https?:\/\//i.test(options.spec)) {
+      // Scope Guard applies to remote specs too: never fetch outside allowlist.
+      const specScope = validateScope(options.spec, config);
+      if (!specScope.ok) {
+        console.error(`Error: spec host not allowed: ${options.spec}`);
+        await engine.close();
+        return 1;
+      }
+    }
+    try {
+      endpoints = await discoverEndpoints(options.spec);
+    } catch (err) {
+      console.error(`Error: cannot parse spec ${options.spec}:`, err instanceof Error ? err.message : err);
+      await engine.close();
+      return 1;
+    }
+    console.error(`Discovered ${endpoints.length} endpoint(s) from ${options.spec}`);
+  }
 
   // Modulos
   const modules = [new SecurityModule(), new PerformanceModule(), new ScalabilityModule()];
@@ -95,32 +135,26 @@ async function main(): Promise<number> {
 
   for (const mod of modules) {
     try {
-      const findings = await mod.run(target, config, engine);
+      const findings = await mod.run(baseUrl, config, engine, undefined, endpoints);
       allFindings.push(...findings);
     } catch (err) {
       console.error(`Error in module ${mod.id}:`, err instanceof Error ? err.message : err);
     }
   }
 
-  // Deduplicar + Sanitizar
-  const deduped = deduplicate(allFindings);
-  const sanitizer = new Sanitizer(config.scope.allowed_targets);
-  const sanitized = deduped.map((f) => sanitizer.sanitizeFinding(f));
-
-  // IA
-  const aiRouter = createAIRouter(config.ai);
-  await aiRouter.triage(sanitized);
-  const synthesis = await aiRouter.synthesize(sanitized);
+  // Shared post-process pipeline: dedupe → sanitize → ignore → AI
+  const lexisignore = loadLexisignore(options.config);
+  const { findings, synthesis, meta } = await runAuditPipeline({
+    findings: allFindings,
+    config,
+    target: baseUrl,
+    durationMs: Date.now() - t0,
+    incomplete: engine.getThrottleState() === 'abort',
+    lexisignore,
+    ai: config.ai
+  });
 
   // Reporte
-  const meta = {
-    target,
-    mode: config.mode,
-    timestamp: new Date().toISOString(),
-    durationMs: Date.now() - t0,
-    incomplete: engine.getThrottleState() === 'abort'
-  };
-
   let reporter;
   switch (format) {
     case 'md':
@@ -133,7 +167,7 @@ async function main(): Promise<number> {
       reporter = new JsonReporter();
   }
 
-  const report = reporter.generate(sanitized, meta);
+  const report = reporter.generate(findings, meta, lexisignore ?? undefined);
 
   if (outputPath && outputPath !== '-') {
     writeFileSync(resolve(outputPath), report, 'utf-8');
@@ -144,22 +178,31 @@ async function main(): Promise<number> {
 
   // Resumen
   console.error(`\nLexisGuard finished in ${(meta.durationMs / 1000).toFixed(1)}s`);
-  console.error(`Findings: ${sanitized.length} | Posture: ${synthesis.overall_posture}`);
+  console.error(`Findings: ${findings.length} | Posture: ${synthesis?.overall_posture ?? 'n/a'}`);
 
   // Audit log
   const auditLog = new AuditLog();
+  // lexis: count-based trend vs the previous run for this target (audit log stores no finding hashes)
+  const trend = computeTrend(findings, auditLog.getPath(), meta.target);
   auditLog.write({
     timestamp: meta.timestamp,
-    target,
-    mode: config.mode,
+    target: meta.target,
+    mode: meta.mode,
     checks: modules.map((m) => m.id),
-    findings_count: sanitized.length,
+    findings_count: findings.length,
     incomplete: meta.incomplete
   });
 
+  // Trending summary
+  if (trend.previousRunAt) {
+    const delta = findings.length - trend.previousCount;
+    const sign = delta > 0 ? '+' : '';
+    console.error(`Trend vs previous run (${trend.previousRunAt}): ${trend.previousCount} -> ${findings.length} findings (${sign}${delta})`);
+  }
+
   // Exit code
   const threshold = parseFloat(options.threshold ?? '7.0');
-  const hasCritical = sanitized.some((f) => (f.cvss ?? 0) >= threshold || f.worst_case === 'critical');
+  const hasCritical = findings.some((f) => (f.cvss ?? 0) >= threshold || f.worst_case === 'critical');
 
   await engine.close();
   return hasCritical ? 1 : 0;

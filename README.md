@@ -74,6 +74,7 @@ LexisGuard reads `.lexisrc.json` from the current directory (or any other cosmic
     "environment": "production"
   },
   "mode": "safe",
+  "profile": "deep",
   "auth": {
     "profiles": {
       "user_a": { "type": "bearer", "token": "${LEXIS_USER_A_TOKEN}", "role": "standard", "owns": ["order:1001"] },
@@ -96,6 +97,7 @@ Notes:
 
 - **Security scope guard** — audit targets must be inside `scope.allowed_targets`; anything else is rejected.
 - **Multi-auth** — at least 3 profiles (2 standard + 1 admin) are required for cross-auth (BOLA/BFLA) testing.
+- **Profiles** — `profile: quick | deep` selects the check matrix; soak load and burst stress only run in `aggressive` mode.
 - **Environment variables** — `${NAME}` tokens in auth values are interpolated from the process environment; a missing variable fails loudly.
 - **API keys** — set through the workbench Configuration screen. Keys are encrypted with AES-256-GCM before being stored; the key material lives in `~/.lexisguard/.secret`.
   The `.lexisrc.json` itself never stores a plaintext key.
