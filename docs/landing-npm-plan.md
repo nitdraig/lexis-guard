@@ -72,8 +72,8 @@ social impact projects. Learn more about our mission and other projects at
    "author": "<owner>",
    "keywords": ["api-security", "audit", "cli", "dast", "owasp"]
    ```
-   Note: description is currently in Spanish; translate to English to match the
-   README (`Automated API security, performance and scalability auditing orchestrator`).
+   Note: `description` was already aligned to English in commit `2212495`
+   (`Automated API security, performance and scalability auditing workbench and one-shot CLI`).
 4. **Dry-run verification** (before publishing):
    ```bash
    npm pack --dry-run    # confirm only dist/, README.md, LICENSE, package.json

@@ -112,8 +112,19 @@ Do **not** re-plan work that is already in tree. Treat these as done relative to
 | Session history | Persist / restore audit sessions from audit log | `AuditLog.saveSession`, History view |
 | Streaming findings | Orchestrator `onFinding` + panel updates | `src/tui/orchestrator.ts`, audit screen |
 | Packaging | Dual bin names, richer AI SDK deps | `package.json` |
+| Shared audit pipeline | `runAuditPipeline` dedupes → sanitizes → applies `.lexisignore` → triages/synthesizes with AI; used by CLI and TUI | `src/core/audit-pipeline.ts`, `src/cli.ts`, `src/tui/app.tsx` |
+| OpenAPI discovery | `--spec` parsed; endpoints feed security/cross-auth checks; remote spec hosts validated against scope | `src/cli.ts`, `src/openapi/parser.ts`, `src/modules/security-module.ts`, `src/modules/cross-auth-tester.ts` |
+| Profiles & mode gates | `profile: quick | deep` selects check matrix; soak/burst and aggressive cross-auth gated by `mode: aggressive` | `src/config/profiles.ts`, `src/modules/scalability-module.ts`, `src/modules/cross-auth-tester.ts` |
+| Throttle fidelity | `HttpEngine` recreates `pLimit` when `ThrottleController` changes the concurrency limit | `src/core/http-engine.ts` |
+| Secret redaction | Sanitizer strips JWT-shaped strings, Bearer tokens, `Set-Cookie` values, and API-key headers from evidence | `src/core/sanitizer.ts` |
+| Suppressions | `.lexisignore` loaded and passed to reporters; CLI filters findings pre-report | `src/config/lexisignore-loader.ts`, `src/cli.ts` |
+| Auth guard wiring | `resolveAuthProfiles` called in CLI preflight; missing profiles surface as a warning | `src/core/auth-guard.ts`, `src/cli.ts` |
+| Cross-auth over discovered ops | BOLA/BFLA probes use spec-declared paths; heuristic fallback kept for spec-less runs | `src/modules/cross-auth-tester.ts` |
+| Deeper security checks | Broken auth, mass assignment on write ops, excessive data exposure heuristics, TLS/redirect basics | `src/modules/security-module.ts` |
+| Trending | `computeTrend` compares current finding count vs previous run for the same target | `src/core/trending.ts`, `src/cli.ts` |
+| Target canonicalization | `canonicalizeTarget` normalizes bare hostnames to `https://` origin once after scope validation | `src/core/scope-guard.ts`, `src/cli.ts` |
 
-**Implication:** The blueprint’s *workbench* and *AI routing* chapters are largely implemented. Remaining leverage is **discovery, shared pipeline completeness, mode/profile gates, throttle fidelity, and secret redaction in evidence**.
+**Implication:** The blueprint’s *workbench*, *AI routing*, *shared pipeline*, *OpenAPI discovery*, *mode/profile gates*, *throttle*, *secret redaction*, and *trending* chapters are largely implemented. Remaining leverage is **documentation completeness, test coverage for the new modules, and npm/landing packaging**.
 
 ---
 
@@ -123,90 +134,42 @@ Ordered by leverage (impact ÷ effort). Confirmed against the tree at the baseli
 
 | ID | Gap | Category | Impact | Effort | Evidence |
 | --- | --- | --- | --- | --- | --- |
-| G-01 | `--spec` declared but never consumed; OpenAPI parser unused by audit path | correctness / product | High | M | `src/cli.ts` (`-s, --spec`); `src/openapi/parser.ts` |
-| G-02 | No shared post-process module; CLI does dedupe→sanitize→AI→report; TUI stores findings without triage/synthesis/reporters in the same place | architecture | High | M | `src/cli.ts` vs `src/tui/app.tsx` `storeFindings` |
-| G-03 | `profiles.ts` (quick/deep) and `config.mode` do not gate module checks; soak/BOLA run regardless of “safe” | correctness / safety | High | M | `src/config/profiles.ts`; modules ignore mode |
-| G-04 | Throttle reduces concurrency in controller API but engine keeps fixed `pLimit` | correctness / safety | Med | S | `ThrottleController.getConcurrencyLimit`; `HttpEngine` limiter |
-| G-05 | Sanitizer redacts allowlisted hosts only — cookie/JWT snippets can land in evidence | security | High | S | `src/modules/security-module.ts` JWT cookie evidence; `src/core/sanitizer.ts` |
-| G-06 | `.lexisignore` parsers/reporters exist; CLI/TUI never load or pass suppressions | product | Med | S | `src/config/lexisignore-parser.ts`; reporters accept optional arg unused by callers |
-| G-07 | `auth-guard` not wired into preflight before BOLA/BFLA | architecture | Med | S | `src/core/auth-guard.ts` unused by CLI/TUI entry |
-| G-08 | Cross-auth paths are heuristics (`order:1001` → `/orders/1001`; fixed `/admin/*`) | product depth | High | M | `src/modules/cross-auth-tester.ts` |
-| G-09 | Security surface is mostly header/file probes + cross-auth; not OWASP API Top 10 over discovered ops | product depth | High | L | `src/modules/security-module.ts` |
-| G-10 | `trending.ts` unused; no delta vs previous sessions in UI/CLI | direction | Low | S | `src/core/trending.ts` |
-| G-11 | Target URL normalization: scope accepts bare hostnames; `Pool` needs absolute URL | correctness | Med | S | `src/core/scope-guard.ts` vs `HttpEngine` constructor |
-| G-12 | No root README / operator docs (only this plan so far) | DX | Med | S | missing `README.md` |
+| G-12 | README exists but does not document exit codes / CVSS threshold behavior | DX | Low | S | `README.md` mentions `--threshold` but not exit semantics; `src/cli.ts` returns `1` on critical/high findings |
 
 ---
 
 ## 4. Roadmap — phased improvements
 
-Execute phases in order. Each phase should leave `npm run lint` and `npm test` green.
+Status after commit `2212495`:
 
-### Phase A — Shared audit pipeline (foundation)
+| Phase | Status | Notes |
+| --- | --- | --- |
+| A — Shared audit pipeline | Done | `runAuditPipeline` shared by CLI and TUI |
+| B — OpenAPI discovery | Done | `--spec` consumed; endpoints feed security/cross-auth |
+| C — Profiles, modes, throttle | Done | `quick/deep` profile gates + dynamic `pLimit` |
+| D — Secret redaction & suppressions | Done | JWT/Bearer/cookie/API-key redaction; `.lexisignore` loaded |
+| E — Depth of security checks | Done | Broken auth, mass assignment, data exposure, TLS/redirect |
+| F — DX & observability | Partial | `package.json` description aligned; trending in CLI; README still needs exit-code docs |
+| G — Packaging & landing | Not started | Detailed in `docs/landing-npm-plan.md` |
 
-**Goal:** One function owns post-module processing for CLI and TUI.
+### Phase F — DX & observability (remaining)
 
-1. Extract e.g. `src/core/audit-pipeline.ts`:
-   - Input: raw `Finding[]`, `Lexisrc`, meta builders, optional `Lexisignore`, AI config.
-   - Steps: `deduplicate` → secret+host `sanitize` → apply ignore → `createAIRouter` triage/synthesize → return `{ findings, synthesis, meta }`.
-2. CLI one-shot and TUI `storeFindings` / export path call the same helper.
-3. Canonicalize target to absolute origin once after scope validation; pass that URL to `HttpEngine`.
-4. Wire `resolveAuthProfiles` (auth-guard) in preflight; fail fast with clear errors when BOLA/BFLA prerequisites missing (or skip those checks explicitly when profile = quick).
+1. Document CLI exit codes in `README.md`:
+   - `0` — no findings above `--threshold`.
+   - `1` — at least one finding with `cvss >= threshold` or `worst_case === 'critical'`.
+   - `2` — TTY required but not available.
+   - Fatal errors also exit `1`.
+2. Surface trending delta in the TUI History or post-audit summary (currently only printed in CLI one-shot).
+3. Keep install/usage examples in sync between `README.md`, landing page, and npm registry page.
 
-**Done when:** Changing sanitization or AI triage requires editing one module; both surfaces get identical deduped shapes.
+### Phase G — Packaging & landing
 
-### Phase B — OpenAPI discovery & auth mapping
+See `docs/landing-npm-plan.md`:
 
-**Goal:** `--spec` drives what gets tested.
-
-1. CLI: read `options.spec`; TUI Config/Audit: optional spec path field.
-2. Call `discoverEndpoints`; if spec is a URL, validate host against allowlist before fetch.
-3. Pass `Endpoint[]` into security / cross-auth (extend `AuditModule.run` or a shared `AuditContext`).
-4. Replace BFLA hard-coded admin paths with operations tagged admin / matching config; map `owns` entries to OpenAPI path templates where possible.
-5. Keep heuristic fallback only when no spec is provided (document the limitation).
-
-**Done when:** An audit with a real OpenAPI file exercises those paths; without spec, behavior is documented and tests cover both modes.
-
-### Phase C — Profiles, modes, and throttle fidelity
-
-**Goal:** Config means what users think it means.
-
-1. Drive module internals (or a check registry) from `resolveProfile('quick' | 'deep')`.
-2. Gate aggressive work: soak / high burst only in `aggressive` (or deep+aggressive); safe mode = headers, passive probes, limited latency checks.
-3. Honor `getConcurrencyLimit()` inside `HttpEngine` (dynamic limiter or admission control) in addition to abort.
-4. Enforce `max_requests_per_test` as a hard ceiling in the engine.
-
-**Done when:** Unit tests prove safe mode never starts soak; throttle state reduces in-flight concurrency.
-
-### Phase D — Secret redaction & suppressions
-
-**Goal:** Safe reports and AI prompts.
-
-1. Extend `Sanitizer` (or a sibling) to redact Bearer tokens, JWT-shaped strings, `Set-Cookie` values, and common API key header patterns in `evidence` / descriptions before AI and reporters.
-2. Load `.lexisignore` next to config (cosmiconfig or fixed filename); pass into reporters and filter findings pre-report.
-3. Ensure TUI Export and CLI output both receive suppressions.
-
-**Done when:** Cookie/JWT fixtures never appear verbatim in generated JSON/MD/SARIF; ignored hashes are absent from active findings (and listed as suppressions where the format supports it).
-
-### Phase E — Depth of security checks
-
-**Goal:** Credible OWASP API coverage on discovered endpoints.
-
-Prioritize (after B/C):
-
-- Broken authentication patterns (unauthenticated access to protected ops from spec).
-- Mass assignment / unexpected fields on write ops (aggressive only).
-- Rate-limit presence (already partially sketched in profiles).
-- Excessive data exposure heuristics on JSON responses (size / sensitive key names) with redaction.
-- TLS / redirect basics on HTTPS targets.
-
-Keep checks deterministic and testable with MSW; AI remains annotation-only.
-
-### Phase F — DX & observability
-
-1. Root `README.md`: install, `.lexisrc` example, workbench vs CI, exit codes, AI providers.
-2. Surface trending (delta vs last session for same target) in History or post-audit summary.
-3. Align package `description` / bin naming docs with actual binaries (`lexisguard`, `lexisg-cli`).
+1. Add `files: ["dist"]` and `prepack` hook to `package.json`.
+2. Add repository/homepage/bugs metadata; verify `npm pack --dry-run`.
+3. Publish `lexisguard-cli` to npm and verify global install on Windows.
+4. Build bilingual Astro landing under `site/` and deploy to GitHub Pages.
 
 ---
 
@@ -214,12 +177,9 @@ Keep checks deterministic and testable with MSW; AI remains annotation-only.
 
 | Step | Plan focus | Depends on | Effort |
 | --- | --- | --- | --- |
-| 1 | Phase A — shared pipeline + URL canonicalize + auth-guard preflight | — | M |
-| 2 | Phase D — secret sanitizer + `.lexisignore` load (can parallelize with B after A starts) | A (sanitize hook) | S–M |
-| 3 | Phase B — wire `--spec` + feed endpoints | A | M |
-| 4 | Phase C — profiles / mode / throttle | A | M |
-| 5 | Phase E — deeper security checks | B, C | L |
-| 6 | Phase F — README + trending UX | A | S |
+| 1 | Phase F — README exit-code docs + TUI trending | — | S |
+| 2 | Phase G — npm packaging, publish, verify (Windows shims) | — | S–M |
+| 3 | Phase G — Astro landing EN/ES + GitHub Pages workflow | G step 2 | M |
 
 Verification baseline for every step:
 
@@ -244,15 +204,15 @@ npm test        # vitest → all pass
 
 The blueprint is considered **implemented for v1** when all of the following hold:
 
-- [ ] `--spec openapi.yaml` changes which paths are probed (proven by test).
-- [ ] `mode: safe` cannot run soak/burst stress (proven by test).
-- [ ] Quick vs deep profiles select different check sets (proven by test).
-- [ ] CLI and TUI produce the same deduped finding set for the same target/config (shared pipeline).
-- [ ] Evidence in reports has no raw session cookies / JWTs from fixture responses.
-- [ ] `.lexisignore` entries suppress matching hashes in CLI output.
-- [ ] Throttle state reduces concurrency before abort.
+- [x] `--spec openapi.yaml` changes which paths are probed (proven by test).
+- [x] `mode: safe` cannot run soak/burst stress (proven by test).
+- [x] Quick vs deep profiles select different check sets (proven by test).
+- [x] CLI and TUI produce the same deduped finding set for the same target/config (shared pipeline).
+- [x] Evidence in reports has no raw session cookies / JWTs from fixture responses.
+- [x] `.lexisignore` entries suppress matching hashes in CLI output.
+- [x] Throttle state reduces concurrency before abort.
 - [ ] README documents workbench, CI one-shot, and exit codes.
-- [ ] `npm run lint` and `npm test` remain green.
+- [x] `npm run lint` and `npm test` remain green.
 
 ---
 
