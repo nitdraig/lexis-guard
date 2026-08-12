@@ -9,6 +9,7 @@ function stubConfig(): Lexisrc {
   return {
     scope: { allowed_targets: ['127.0.0.1'], environment: 'staging' },
     mode: 'safe',
+    profile: 'deep',
     auth: {
       profiles: {
         a: { type: 'bearer', token: 't', role: 'standard', owns: ['r:1'] },
@@ -129,7 +130,7 @@ describe('ScalabilityModule', () => {
     await engine.close();
   });
 
-  it('detects soak test failures', async () => {
+  it('detects soak test failures (aggressive mode only)', async () => {
     const engine = new HttpEngine({
       baseUrl,
       concurrency: 20,
@@ -137,10 +138,29 @@ describe('ScalabilityModule', () => {
       abortOnDegradationPct: 40
     });
 
+    const aggressiveConfig: Lexisrc = { ...stubConfig(), mode: 'aggressive' };
     const mod = new ScalabilityModule();
-    const findings = await mod.run(baseUrl, stubConfig(), engine);
+    const findings = await mod.run(baseUrl, aggressiveConfig, engine);
 
     expect(findings.some((f) => f.rule_id === 'SOAK_TEST_FAILURES')).toBe(true);
+    await engine.close();
+  });
+
+  it('never runs soak in safe mode (Phase C gate)', async () => {
+    // The server starts failing with 503 after request 15; if soak ran in
+    // safe mode we would see SOAK_TEST_FAILURES. Safe mode must skip it.
+    const engine = new HttpEngine({
+      baseUrl,
+      concurrency: 20,
+      latencyThresholdMs: 1000,
+      abortOnDegradationPct: 40
+    });
+
+    const safeConfig: Lexisrc = { ...stubConfig(), mode: 'safe' };
+    const mod = new ScalabilityModule();
+    const findings = await mod.run(baseUrl, safeConfig, engine);
+
+    expect(findings.some((f) => f.rule_id === 'SOAK_TEST_FAILURES')).toBe(false);
     await engine.close();
   });
 });

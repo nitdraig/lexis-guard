@@ -37,7 +37,7 @@ export function ExportView({ session, onBack }: ExportViewProps): React.ReactEle
     if (!session.meta) return;
     try {
       const reporter = new FORMAT_REPORTERS[format]();
-      const content = reporter.generate(findings, session.meta);
+      const content = reporter.generate(findings, session.meta, session.lexisignore ?? undefined);
       writeFileSync(outPath, content, 'utf-8');
       setMessage({ ok: true, text: `Report exported to ${outPath}` });
     } catch (err) {

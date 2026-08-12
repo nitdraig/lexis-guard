@@ -63,7 +63,8 @@ export function AuditScreen({ target, config, onComplete, onExit }: AuditScreenP
       baseUrl: target,
       concurrency: config.limits.max_concurrent_requests,
       latencyThresholdMs: 1000,
-      abortOnDegradationPct: config.limits.abort_on_latency_degradation_pct
+      abortOnDegradationPct: config.limits.abort_on_latency_degradation_pct,
+      maxRequests: config.limits.max_requests_per_test
     });
     engineRef.current = engine;
 

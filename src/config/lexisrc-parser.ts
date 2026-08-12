@@ -128,6 +128,7 @@ export function parseLexisrc(content: string | unknown): ParseLexisrcResult {
     resolved = {
       scope: parsed.data.scope,
       mode: parsed.data.mode,
+      profile: parsed.data.profile,
       auth: {
         profiles: resolveAuthProfiles(parsed.data.auth.profiles)
       },

@@ -3,6 +3,7 @@ import type { Finding } from '../types/finding.js';
 import type { Lexisrc } from '../config/lexisrc-schema.js';
 import type { HttpEngine } from '../core/http-engine.js';
 import { generateFindingHash } from '../utils/finding-hash.js';
+import { resolveProfile } from '../config/profiles.js';
 
 function finding(
   ruleId: string,
@@ -41,6 +42,7 @@ export class PerformanceModule implements AuditModule {
       findings.push(f);
       onFinding?.(f);
     };
+    const profile = resolveProfile(_config.profile);
 
     // 1. Baseline latency on root
     const resp = await engine.fetch('/', 'GET');
@@ -67,7 +69,7 @@ export class PerformanceModule implements AuditModule {
     );
     const contentEncoding = (resp.headers['content-encoding'] as string) ?? '';
 
-    if (contentLength > 50_000 && !contentEncoding) {
+    if (contentLength > 50_000 && !contentEncoding && profile.checks.includes('payload_compression')) {
       track(
         finding('UNCOMPRESSED_LARGE_PAYLOAD', 'GET', '/', 'Large response not compressed', 'low',
           `Content-Length: ${contentLength} bytes, no Content-Encoding`, undefined, 3.0)
@@ -77,7 +79,7 @@ export class PerformanceModule implements AuditModule {
     // 3. HTTP/2 support probe (simple)
     // lexis: undici auto-negotiates HTTP/2 with connect({ protocol: 'https:' })
     // We flag if target uses HTTP/1.1 only on HTTPS.
-    if (target.startsWith('https://')) {
+    if (target.startsWith('https://') && profile.checks.includes('http2')) {
       const via = (resp.headers['via'] as string) ?? '';
       if (via.includes('1.1')) {
         track(

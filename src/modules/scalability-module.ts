@@ -3,6 +3,7 @@ import type { Finding } from '../types/finding.js';
 import type { Lexisrc } from '../config/lexisrc-schema.js';
 import type { HttpEngine } from '../core/http-engine.js';
 import { generateFindingHash } from '../utils/finding-hash.js';
+import { resolveProfile } from '../config/profiles.js';
 
 function finding(
   ruleId: string,
@@ -56,39 +57,46 @@ export class ScalabilityModule implements AuditModule {
       }
     }
 
-    const rateLimited = responses.filter((s) => s === 429).length;
-    if (rateLimited === 0) {
-      track(
-        finding('NO_RATE_LIMIT', 'GET', '/', 'No rate limiting detected on burst', 'medium',
-          `Burst of ${burstSize} requests: no 429 responses`, 'CWE-770', 5.3)
-      );
-    } else {
-      track(
-        finding('RATE_LIMIT_DETECTED', 'GET', '/', 'Rate limiting present', 'info',
-          `${rateLimited}/${burstSize} requests returned 429`, undefined, 1.0)
-      );
+    const profile = resolveProfile(config.profile);
+    if (profile.checks.includes('rate_limit')) {
+      const rateLimited = responses.filter((s) => s === 429).length;
+      if (rateLimited === 0) {
+        track(
+          finding('NO_RATE_LIMIT', 'GET', '/', 'No rate limiting detected on burst', 'medium',
+            `Burst of ${burstSize} requests: no 429 responses`, 'CWE-770', 5.3)
+        );
+      } else {
+        track(
+          finding('RATE_LIMIT_DETECTED', 'GET', '/', 'Rate limiting present', 'info',
+            `${rateLimited}/${burstSize} requests returned 429`, undefined, 1.0)
+        );
+      }
     }
 
     // 2. Soak test: sustained load up to max_requests_per_test / 4
     // lexis: conservative soak to avoid overwhelming the target
-    const soakRequests = Math.min(20, Math.floor(maxRequests / 4));
-    const soakStatuses: number[] = [];
+    // Aggressive mode + deep profile only — safe mode never runs sustained load.
+    const allowSoak = config.mode === 'aggressive' && profile.checks.includes('soak_test');
+    if (allowSoak) {
+      const soakRequests = Math.min(20, Math.floor(maxRequests / 4));
+      const soakStatuses: number[] = [];
 
-    for (let i = 0; i < soakRequests; i++) {
-      try {
-        const resp = await engine.fetch('/', 'GET');
-        soakStatuses.push(resp.statusCode);
-      } catch {
-        soakStatuses.push(0);
+      for (let i = 0; i < soakRequests; i++) {
+        try {
+          const resp = await engine.fetch('/', 'GET');
+          soakStatuses.push(resp.statusCode);
+        } catch {
+          soakStatuses.push(0);
+        }
       }
-    }
 
-    const errors = soakStatuses.filter((s) => s >= 500 || s === 0).length;
-    if (errors > 0) {
-      track(
-        finding('SOAK_TEST_FAILURES', 'GET', '/', 'Errors during sustained load', 'high',
-          `${errors}/${soakRequests} requests failed (5xx or timeout)`, 'CWE-400', 6.5)
-      );
+      const errors = soakStatuses.filter((s) => s >= 500 || s === 0).length;
+      if (errors > 0) {
+        track(
+          finding('SOAK_TEST_FAILURES', 'GET', '/', 'Errors during sustained load', 'high',
+            `${errors}/${soakRequests} requests failed (5xx or timeout)`, 'CWE-400', 6.5)
+        );
+      }
     }
 
     // 3. Throttle state observation

@@ -28,6 +28,28 @@ export type GuardResult =
   | { ok: true }
   | { ok: false; reason: string };
 
+export type CanonicalizeResult =
+  | { ok: true; url: string }
+  | { ok: false; reason: string };
+
+/**
+ * Canonicalize a target to an absolute origin URL. Bare hostnames get the
+ * https scheme; full URLs keep theirs (scheme + origin, path dropped).
+ */
+export function canonicalizeTarget(target: string): CanonicalizeResult {
+  try {
+    let url = target.trim();
+    if (!url.includes('://')) {
+      url = `https://${url}`;
+    }
+    const parsed = new URL(url);
+    return { ok: true, url: parsed.origin };
+  } catch {
+    // Keep the same wording as extractHostname for consistent errors.
+    return { ok: false, reason: `Invalid target URL: ${target}` };
+  }
+}
+
 /**
  * Scope Guard: rejects execution against any host not in
  * `allowed_targets`. No exceptions, no override flags.

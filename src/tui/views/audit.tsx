@@ -2,16 +2,15 @@ import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import { Select, TextInput, StatusMessage } from '@inkjs/ui';
 import { AuditScreen } from '../audit-screen.js';
-import { deduplicate } from '../../core/deduplicator.js';
-import { Sanitizer } from '../../core/sanitizer.js';
 import { parseLexisrc } from '../../config/lexisrc-parser.js';
 import { isValidTarget, targetHostname } from './config.js';
 import type { Lexisrc } from '../../config/lexisrc-schema.js';
+import type { Finding } from '../../types/finding.js';
 import type { TuiSession } from '../session.js';
 
 interface AuditViewProps {
   session: TuiSession;
-  onStoreFindings: (target: string, findings: ReturnType<typeof deduplicate>, durationMs: number) => void;
+  onStoreFindings: (target: string, config: Lexisrc, findings: Finding[], durationMs: number) => void;
   onAddTarget: (hostname: string) => void;
   onBack: () => void;
 }
@@ -108,9 +107,7 @@ export function AuditView({ session, onStoreFindings, onAddTarget, onBack }: Aud
       target={target}
       config={resolved.config}
       onComplete={(findings, durationMs) => {
-        const sanitizer = new Sanitizer(resolved.config.scope.allowed_targets);
-        const deduped = deduplicate(findings).map((f) => sanitizer.sanitizeFinding(f));
-        onStoreFindings(target, deduped, durationMs);
+        onStoreFindings(target, resolved.config, findings, durationMs);
       }}
       onExit={onBack}
     />

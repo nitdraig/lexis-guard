@@ -11,6 +11,7 @@ export function defaultRawLexisrc(): RawLexisrc {
       environment: 'staging'
     },
     mode: 'safe',
+    profile: 'deep',
     auth: {
       profiles: {
         user_a: { type: 'bearer', token: '${LEXIS_USER_A_TOKEN}', role: 'standard', owns: [] },

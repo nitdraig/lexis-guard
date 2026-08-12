@@ -22,6 +22,8 @@ export interface HttpEngineOptions {
   concurrency: number;
   latencyThresholdMs: number;
   abortOnDegradationPct: number;
+  /** Hard ceiling on total requests issued by the engine. Default: unlimited. */
+  maxRequests?: number;
 }
 
 /**
@@ -32,7 +34,10 @@ export class HttpEngine {
   private pool: Pool;
   private throttle: ThrottleController;
   private limiter: ReturnType<typeof pLimit>;
+  /** Concurrency the current limiter was created with (matches throttle). */
+  private limiterLimit: number;
   private requestCount = 0;
+  private readonly maxRequests?: number;
 
   constructor(options: HttpEngineOptions) {
     // lexis: targets may be hostname-only (as stored in .lexisrc) — normalize scheme to https
@@ -50,11 +55,18 @@ export class HttpEngine {
     };
 
     this.throttle = new ThrottleController(throttleLimits);
-    this.limiter = pLimit(options.concurrency);
+    this.limiterLimit = options.concurrency;
+    this.limiter = pLimit(this.limiterLimit);
+    this.maxRequests = options.maxRequests;
   }
 
   getThrottleState(): ReturnType<ThrottleController['getState']> {
     return this.throttle.getState();
+  }
+
+  /** Current in-flight concurrency allowed by the throttle. */
+  getConcurrencyLimit(): number {
+    return this.throttle.getConcurrencyLimit();
   }
 
   /** Number of HTTP requests executed so far (including failed/timeouts). */
@@ -73,6 +85,18 @@ export class HttpEngine {
   ): Promise<HttpResponse> {
     if (this.throttle.getState() === 'abort') {
       throw new Error('Engine aborted: circuit breaker open');
+    }
+    if (this.maxRequests !== undefined && this.requestCount >= this.maxRequests) {
+      throw new Error(`max_requests_per_test reached (${this.maxRequests})`);
+    }
+
+    // lexis: pLimit concurrency is fixed at construction — recreate it whenever
+    // the throttle lowers/raises the limit so new requests observe it. In-flight
+    // requests on the old limiter are left to finish.
+    const throttleLimit = this.throttle.getConcurrencyLimit();
+    if (throttleLimit !== this.limiterLimit) {
+      this.limiterLimit = throttleLimit;
+      this.limiter = pLimit(throttleLimit);
     }
 
     return this.limiter(async () => {
