@@ -125,6 +125,10 @@ npm test         # vitest suite
 npx tsc --noEmit # type check
 ```
 
+## Part of Excelso Open
+
+LexisGuard is proud to be part of **Excelso Open**, the open-source and community-focused branch of Excelso that champions collaborative technology and social impact projects. Learn more about our mission and other projects at [excelso.xyz](https://excelso.xyz).
+
 ## License
 
 LexisGuard is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) (SPDX: `PolyForm-Noncommercial-1.0.0`).
