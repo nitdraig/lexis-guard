@@ -1,7 +1,0 @@
-node_modules
-.env
-.lexisrc.json
-/dist
-/main
-/orca-worktree-trash
-/new-features
