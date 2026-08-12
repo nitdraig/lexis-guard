@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Box, Text } from 'ink';
 import { HomeView } from './views/home.js';
 import { AuditView } from './views/audit.js';
@@ -7,11 +7,11 @@ import { HistoryView } from './views/history.js';
 import { AiView } from './views/ai.js';
 import { ExportView } from './views/export.js';
 import { defaultRawLexisrc } from '../config/default.js';
-import type { RawLexisrc } from '../config/lexisrc-schema.js';
-import { deduplicate } from '../core/deduplicator.js';
-import { Sanitizer } from '../core/sanitizer.js';
+import type { RawLexisrc, Lexisrc } from '../config/lexisrc-schema.js';
+import { loadLexisignore } from '../config/lexisignore-loader.js';
+import type { Finding } from '../types/finding.js';
+import { runAuditPipeline } from '../core/audit-pipeline.js';
 import { AuditLog, type SavedSession } from '../core/audit-log.js';
-import type { ReportMeta } from '../reporter/reporter.js';
 import type { ViewId, TuiSession } from './session.js';
 
 interface AppProps {
@@ -28,32 +28,34 @@ export function App({ initialRawConfig, initialConfigPath, initialTarget, onQuit
   const [findings, setFindings] = useState<TuiSession['findings']>(null);
   const [meta, setMeta] = useState<TuiSession['meta']>(null);
   const [auditRunId, setAuditRunId] = useState(0);
+  // lexis: derive suppressions from the active config path; reloads on change.
+  const lexisignore = useMemo(() => loadLexisignore(configPath), [configPath]);
 
-  const session: TuiSession = { rawConfig, configPath, findings, meta };
+  const session: TuiSession = { rawConfig, configPath, findings, meta, lexisignore };
 
-  function storeFindings(target: string, deduped: ReturnType<typeof deduplicate>, durationMs: number): void {
-    // lexis: raw config only (no env interpolation) so results survive even if tokens are unset
-    const sanitizer = new Sanitizer(rawConfig.scope.allowed_targets);
-    const sanitized = deduped.map((f) => sanitizer.sanitizeFinding(f));
-    const auditMeta: ReportMeta = {
+  function storeFindings(target: string, config: Lexisrc, rawFindings: Finding[], durationMs: number): void {
+    // Shared post-process pipeline: dedupe → sanitize → ignore → meta.
+    // lexis: TUI runs without AI here — consultation is on-demand in the AI view.
+    void runAuditPipeline({
+      findings: rawFindings,
+      config,
       target,
-      mode: rawConfig.mode,
-      timestamp: new Date().toISOString(),
       durationMs,
-      incomplete: false
-    };
-    setFindings(sanitized);
-    setMeta(auditMeta);
-    setAuditRunId((n) => n + 1);
-    new AuditLog().write({
-      timestamp: auditMeta.timestamp,
-      target,
-      mode: rawConfig.mode,
-      checks: ['security', 'performance', 'scalability'],
-      findings_count: sanitized.length,
-      incomplete: false
+      lexisignore
+    }).then(({ findings, meta }) => {
+      setFindings(findings);
+      setMeta(meta);
+      setAuditRunId((n) => n + 1);
+      new AuditLog().write({
+        timestamp: meta.timestamp,
+        target: meta.target,
+        mode: meta.mode,
+        checks: ['security', 'performance', 'scalability'],
+        findings_count: findings.length,
+        incomplete: meta.incomplete
+      });
+      new AuditLog().saveSession(meta, findings);
     });
-    new AuditLog().saveSession(auditMeta, sanitized);
     // lexis: stay on the results screen so the user sees the final state
     // and can decide when to go back to the menu (Esc).
   }

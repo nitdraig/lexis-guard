@@ -21,7 +21,10 @@ export type CheckId =
   | 'http2'
   | 'rate_limit'
   | 'soak_test'
-  | 'throttle_state';
+  | 'throttle_state'
+  | 'broken_auth'
+  | 'mass_assignment'
+  | 'data_exposure';
 
 export interface ProfileDefinition {
   id: 'quick' | 'deep';
@@ -58,7 +61,10 @@ export const DEEP_PROFILE: ProfileDefinition = {
     'http2',
     'rate_limit',
     'soak_test',
-    'throttle_state'
+    'throttle_state',
+    'broken_auth',
+    'mass_assignment',
+    'data_exposure'
   ]
 };
 

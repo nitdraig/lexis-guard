@@ -8,6 +8,7 @@ function stubConfig(): Lexisrc {
   return {
     scope: { allowed_targets: ['127.0.0.1'], environment: 'staging' },
     mode: 'safe',
+    profile: 'deep',
     auth: {
       profiles: {
         a: { type: 'bearer', token: 't', role: 'standard', owns: ['r:1'] },
@@ -103,5 +104,223 @@ describe('SecurityModule', () => {
     expect(exposed.some((f) => f.path === '/.env')).toBe(true);
 
     await engine.close();
+  });
+
+  it('quick profile skips cross-auth (BOLA/BFLA) checks', async () => {
+    // Server 200s every path by default, so in the deep profile BOLA fires
+    // (user_a reaches /rs/1 of user_b). Quick profile must not run BOLA/BFLA.
+    const engine = new HttpEngine({
+      baseUrl,
+      concurrency: 5,
+      latencyThresholdMs: 1000,
+      abortOnDegradationPct: 40
+    });
+
+    const deepConfig: Lexisrc = { ...stubConfig(), profile: 'deep' };
+    const deepMod = new SecurityModule();
+    const deepFindings = await deepMod.run(baseUrl, deepConfig, engine);
+    expect(deepFindings.map((f) => f.rule_id)).toContain('BOLA_ACCESS_CROSS_USER');
+
+    const quickConfig: Lexisrc = { ...stubConfig(), profile: 'quick' };
+    const quickMod = new SecurityModule();
+    const quickFindings = await quickMod.run(baseUrl, quickConfig, engine);
+
+    const ids = quickFindings.map((f) => f.rule_id);
+    expect(ids).not.toContain('BOLA_ACCESS_CROSS_USER');
+    expect(ids).not.toContain('BFLA_ADMIN_ACCESS');
+
+    await engine.close();
+  });
+
+  it('detects data exposure in JSON responses (deep profile)', async () => {
+    const srv = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ user: { password: 'secret123' } }));
+    });
+
+    await new Promise<void>((resolve) => srv.listen(0, '127.0.0.1', resolve));
+    const addr = srv.address() as { port: number };
+    const url = `http://127.0.0.1:${addr.port}`;
+
+    const engine = new HttpEngine({
+      baseUrl: url,
+      concurrency: 5,
+      latencyThresholdMs: 1000,
+      abortOnDegradationPct: 40
+    });
+
+    const mod = new SecurityModule();
+    const findings = await mod.run(url, stubConfig(), engine);
+    expect(findings.some((f) => f.rule_id === 'DATA_EXPOSURE')).toBe(true);
+
+    await engine.close();
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
+  });
+
+  it('does not flag data exposure on non-JSON responses', async () => {
+    const srv = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end('password=secret123');
+    });
+
+    await new Promise<void>((resolve) => srv.listen(0, '127.0.0.1', resolve));
+    const addr = srv.address() as { port: number };
+    const url = `http://127.0.0.1:${addr.port}`;
+
+    const engine = new HttpEngine({
+      baseUrl: url,
+      concurrency: 5,
+      latencyThresholdMs: 1000,
+      abortOnDegradationPct: 40
+    });
+
+    const mod = new SecurityModule();
+    const findings = await mod.run(url, stubConfig(), engine);
+    expect(findings.some((f) => f.rule_id === 'DATA_EXPOSURE')).toBe(false);
+
+    await engine.close();
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
+  });
+
+  it('does not flag TLS downgrade on HTTP targets', async () => {
+    // Existing server is HTTP; TLS checks should only fire on HTTPS targets.
+    const engine = new HttpEngine({
+      baseUrl,
+      concurrency: 5,
+      latencyThresholdMs: 1000,
+      abortOnDegradationPct: 40
+    });
+
+    const mod = new SecurityModule();
+    const findings = await mod.run(baseUrl, stubConfig(), engine);
+    expect(findings.some((f) => f.rule_id === 'TLS_DOWNGRADE')).toBe(false);
+
+    await engine.close();
+  });
+
+  it('detects broken auth on unauthenticated mutating endpoints from spec', async () => {
+    const srv = createServer((req, res) => {
+      if (req.url === '/users' && req.method === 'POST') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ id: 1 }));
+        return;
+      }
+      res.writeHead(200);
+      res.end('ok');
+    });
+
+    await new Promise<void>((resolve) => srv.listen(0, '127.0.0.1', resolve));
+    const addr = srv.address() as { port: number };
+    const url = `http://127.0.0.1:${addr.port}`;
+
+    const engine = new HttpEngine({
+      baseUrl: url,
+      concurrency: 5,
+      latencyThresholdMs: 1000,
+      abortOnDegradationPct: 40
+    });
+
+    const mod = new SecurityModule();
+    const endpoints = [{ method: 'POST', path: '/users' }];
+    const findings = await mod.run(url, stubConfig(), engine, undefined, endpoints);
+    expect(findings.some((f) => f.rule_id === 'BROKEN_AUTH' && f.path === '/users')).toBe(true);
+
+    await engine.close();
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
+  });
+
+  it('ignores 401/403 on broken-auth probes (not a finding)', async () => {
+    const srv = createServer((req, res) => {
+      if (req.url === '/users' && req.method === 'POST') {
+        res.writeHead(401);
+        res.end('Unauthorized');
+        return;
+      }
+      res.writeHead(200);
+      res.end('ok');
+    });
+
+    await new Promise<void>((resolve) => srv.listen(0, '127.0.0.1', resolve));
+    const addr = srv.address() as { port: number };
+    const url = `http://127.0.0.1:${addr.port}`;
+
+    const engine = new HttpEngine({
+      baseUrl: url,
+      concurrency: 5,
+      latencyThresholdMs: 1000,
+      abortOnDegradationPct: 40
+    });
+
+    const mod = new SecurityModule();
+    const endpoints = [{ method: 'POST', path: '/users' }];
+    const findings = await mod.run(url, stubConfig(), engine, undefined, endpoints);
+    expect(findings.some((f) => f.rule_id === 'BROKEN_AUTH')).toBe(false);
+
+    await engine.close();
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
+  });
+
+  it('detects mass assignment in aggressive mode', async () => {
+    const srv = createServer((req, res) => {
+      if (req.url === '/users' && req.method === 'POST') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ id: 1 }));
+        return;
+      }
+      res.writeHead(200);
+      res.end('ok');
+    });
+
+    await new Promise<void>((resolve) => srv.listen(0, '127.0.0.1', resolve));
+    const addr = srv.address() as { port: number };
+    const url = `http://127.0.0.1:${addr.port}`;
+
+    const engine = new HttpEngine({
+      baseUrl: url,
+      concurrency: 5,
+      latencyThresholdMs: 1000,
+      abortOnDegradationPct: 40
+    });
+
+    const aggressiveConfig: Lexisrc = { ...stubConfig(), mode: 'aggressive' };
+    const mod = new SecurityModule();
+    const endpoints = [{ method: 'POST', path: '/users' }];
+    const findings = await mod.run(url, aggressiveConfig, engine, undefined, endpoints);
+    expect(findings.some((f) => f.rule_id === 'MASS_ASSIGNMENT' && f.path === '/users')).toBe(true);
+
+    await engine.close();
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
+  });
+
+  it('skips mass assignment in safe mode', async () => {
+    const srv = createServer((req, res) => {
+      if (req.url === '/users' && req.method === 'POST') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ id: 1 }));
+        return;
+      }
+      res.writeHead(200);
+      res.end('ok');
+    });
+
+    await new Promise<void>((resolve) => srv.listen(0, '127.0.0.1', resolve));
+    const addr = srv.address() as { port: number };
+    const url = `http://127.0.0.1:${addr.port}`;
+
+    const engine = new HttpEngine({
+      baseUrl: url,
+      concurrency: 5,
+      latencyThresholdMs: 1000,
+      abortOnDegradationPct: 40
+    });
+
+    const safeConfig: Lexisrc = { ...stubConfig(), mode: 'safe' };
+    const mod = new SecurityModule();
+    const endpoints = [{ method: 'POST', path: '/users' }];
+    const findings = await mod.run(url, safeConfig, engine, undefined, endpoints);
+    expect(findings.some((f) => f.rule_id === 'MASS_ASSIGNMENT')).toBe(false);
+
+    await engine.close();
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
   });
 });

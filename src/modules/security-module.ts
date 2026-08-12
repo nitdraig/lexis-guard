@@ -2,8 +2,10 @@ import type { AuditModule } from './audit-module.js';
 import type { Finding } from '../types/finding.js';
 import type { Lexisrc } from '../config/lexisrc-schema.js';
 import type { HttpEngine } from '../core/http-engine.js';
+import type { Endpoint } from '../openapi/parser.js';
 import { generateFindingHash } from '../utils/finding-hash.js';
 import { testBOLA, testBFLA } from './cross-auth-tester.js';
+import { resolveProfile } from '../config/profiles.js';
 
 function finding(
   ruleId: string,
@@ -37,6 +39,29 @@ function headerValue(
   return val;
 }
 
+const SENSITIVE_KEY_RE = /password|passwd|secret|token|api_key|apikey|credential|ssn|credit_card|cvv|pin|private_key|auth_token|refresh_token|session_id/i;
+
+function findSensitiveKeys(jsonBody: string): string[] {
+  try {
+    const obj = JSON.parse(jsonBody);
+    const keys: string[] = [];
+    function walk(value: unknown): void {
+      if (Array.isArray(value)) {
+        for (const item of value) walk(item);
+      } else if (value && typeof value === 'object') {
+        for (const [k, v] of Object.entries(value)) {
+          if (SENSITIVE_KEY_RE.test(k)) keys.push(k);
+          walk(v);
+        }
+      }
+    }
+    walk(obj);
+    return [...new Set(keys)];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Security audit module — OWASP Web + API Top 10 checks.
  */
@@ -44,7 +69,7 @@ export class SecurityModule implements AuditModule {
   readonly id = 'security';
   readonly name = 'Security';
 
-  async run(_target: string, _config: Lexisrc, engine: HttpEngine, onFinding?: (f: Finding) => void): Promise<Finding[]> {
+  async run(_target: string, _config: Lexisrc, engine: HttpEngine, onFinding?: (f: Finding) => void, endpoints?: Endpoint[]): Promise<Finding[]> {
     const findings: Finding[] = [];
     // Stream each finding to the UI the moment it is detected.
     const track = (f: Finding): void => {
@@ -126,12 +151,81 @@ export class SecurityModule implements AuditModule {
       );
     }
 
-    // 4. BOLA / BFLA — cross-auth authorization tests
-    const bolaFindings = await testBOLA(_target, _config, engine);
-    for (const f of bolaFindings) track(f);
+    // 4. TLS redirect downgrade on HTTPS targets
+    const profile = resolveProfile(_config.profile);
+    if (profile.checks.includes('tls') && _target.startsWith('https://')) {
+      const location = headerValue(headers, 'location');
+      if (location && location.startsWith('http://')) {
+        track(
+          finding('TLS_DOWNGRADE', 'GET', '/', 'HTTPS target redirects to HTTP', 'high',
+            `Location header downgrade: ${location.slice(0, 80)}`, 'CWE-319', 7.5)
+        );
+      }
+    }
 
-    const bflaFindings = await testBFLA(_target, _config, engine);
-    for (const f of bflaFindings) track(f);
+    // 5. Excessive data exposure — sensitive keys in JSON responses
+    if (profile.checks.includes('data_exposure')) {
+      const contentType = headerValue(headers, 'content-type') ?? '';
+      if (contentType.includes('json') && root.body) {
+        const sensitiveKeys = findSensitiveKeys(root.body);
+        if (sensitiveKeys.length > 0) {
+          track(
+            finding('DATA_EXPOSURE', 'GET', '/', 'Sensitive data keys exposed in JSON response', 'medium',
+              `Keys: ${sensitiveKeys.join(', ').slice(0, 120)}`, 'CWE-200', 5.3)
+          );
+        }
+      }
+    }
+
+    // 6. Broken authentication — unauthenticated access to mutating spec endpoints
+    if (profile.checks.includes('broken_auth') && endpoints && endpoints.length > 0) {
+      const mutating = endpoints.filter((ep) => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(ep.method)).slice(0, 5);
+      for (const ep of mutating) {
+        try {
+          const resp = await engine.fetch(ep.path, ep.method);
+          if (resp.statusCode >= 200 && resp.statusCode < 300) {
+            track(
+              finding('BROKEN_AUTH', ep.method, ep.path, 'Unauthenticated access to protected operation', 'high',
+                `${ep.method} ${ep.path} returned ${resp.statusCode} without auth`, 'CWE-306', 7.5)
+            );
+          }
+        } catch {
+          // lexis: connection errors on auth probes are not findings
+        }
+      }
+    }
+
+    // 7. Mass assignment — unexpected fields accepted on write ops (aggressive only)
+    if (profile.checks.includes('mass_assignment') && _config.mode === 'aggressive' && endpoints && endpoints.length > 0) {
+      const writeOps = endpoints.filter((ep) => ['POST', 'PUT', 'PATCH'].includes(ep.method)).slice(0, 3);
+      for (const ep of writeOps) {
+        try {
+          const body = JSON.stringify({ _lexisguard_test: 'value' });
+          const resp = await engine.fetch(ep.path, ep.method, { 'content-type': 'application/json' }, body);
+          if (resp.statusCode >= 200 && resp.statusCode < 300) {
+            track(
+              finding('MASS_ASSIGNMENT', ep.method, ep.path, 'Write operation accepted unexpected field', 'medium',
+                `${ep.method} ${ep.path} accepted _lexisguard_test field`, 'CWE-915', 6.5)
+            );
+          }
+        } catch {
+          // lexis: ignore connection errors on mass-assignment probes
+        }
+      }
+    }
+
+    // 8. BOLA / BFLA — cross-auth authorization tests (spec-driven paths when
+    //    a spec is provided, heuristic fallback otherwise). Deep profile only:
+    //    these probe cross-user resources and are skipped for quick audits.
+    if (profile.checks.includes('bola')) {
+      const bolaFindings = await testBOLA(_target, _config, engine, endpoints);
+      for (const f of bolaFindings) track(f);
+    }
+
+    if (profile.checks.includes('bfla')) {
+      const bflaFindings = await testBFLA(_target, _config, engine, endpoints);
+      for (const f of bflaFindings) track(f);
+    }
 
     return findings;
   }

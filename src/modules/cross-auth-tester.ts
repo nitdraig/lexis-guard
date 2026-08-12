@@ -1,6 +1,7 @@
 import type { Finding } from '../types/finding.js';
 import type { Lexisrc, AuthProfile } from '../config/lexisrc-schema.js';
 import type { HttpEngine } from '../core/http-engine.js';
+import type { Endpoint } from '../openapi/parser.js';
 import { generateFindingHash } from '../utils/finding-hash.js';
 
 function finding(
@@ -42,6 +43,64 @@ function getAuthHeader(profile: AuthProfile): Record<string, string> {
 }
 
 /**
+ * Map an `owns` resource (e.g. "order:1001") to a probe path.
+ *
+ * With a spec: find a path template whose parameterized segment matches the
+ * resource type (e.g. `/orders/{orderId}` for "order") and inject the id.
+ * Without a spec: keep the historical heuristic `/{type}s/{id}`.
+ *
+ * Returns null when the spec provides no matching template — the caller skips
+ * the resource instead of guessing (documented Phase B limitation).
+ */
+function probePathForResource(resource: string, endpoints: Endpoint[] | undefined): string | null {
+  const [type, id] = resource.split(':');
+  if (!type || !id) return null;
+
+  const typeLower = type.toLowerCase();
+  if (endpoints && endpoints.length > 0) {
+    for (const ep of endpoints) {
+      const segments = ep.path.split('/').filter(Boolean);
+      const last = segments[segments.length - 1];
+      const prev = segments[segments.length - 2];
+      if (!last || !prev || !last.startsWith('{') || !last.endsWith('}')) continue;
+      const prevLower = prev.toLowerCase();
+      if (prevLower === typeLower || prevLower === `${typeLower}s` || prevLower === `${typeLower}es`) {
+        // Substitute the id into the full template, preserving any prefix
+        // segments (e.g. /v2/orders/{orderId} -> /v2/orders/1001).
+        return ep.path.replace(/\{[^}]+\}/, id);
+      }
+    }
+    // lexis: spec present but no template matches this resource — skip,
+    // do not fall back to the heuristic (spec drives probing).
+    return null;
+  }
+  return `/${type}s/${id}`;
+}
+
+/**
+ * Admin paths to probe for BFLA.
+ * With a spec: paths whose segments contain "admin" (e.g. `/admin/users/{id}`),
+ * deduplicated. Without a spec: the historical hard-coded list.
+ */
+function adminProbePaths(endpoints: Endpoint[] | undefined): string[] {
+  if (endpoints && endpoints.length > 0) {
+    const seen = new Set<string>();
+    const paths: string[] = [];
+    for (const ep of endpoints) {
+      const segments = ep.path.split('/').filter(Boolean);
+      if (segments.some((s) => s.toLowerCase() === 'admin')) {
+        if (!seen.has(ep.path)) {
+          seen.add(ep.path);
+          paths.push(ep.path);
+        }
+      }
+    }
+    return paths;
+  }
+  return ['/admin/users', '/admin/roles', '/admin/config'];
+}
+
+/**
  * BOLA (Broken Object Level Authorization) test:
  * User A tries to access resources owned by User B.
  * If the server returns 200, it's a BOLA violation.
@@ -49,7 +108,8 @@ function getAuthHeader(profile: AuthProfile): Record<string, string> {
 export async function testBOLA(
   _target: string,
   config: Lexisrc,
-  engine: HttpEngine
+  engine: HttpEngine,
+  endpoints?: Endpoint[]
 ): Promise<Finding[]> {
   const findings: Finding[] = [];
   const profiles = Object.entries(config.auth.profiles);
@@ -74,10 +134,8 @@ export async function testBOLA(
       if (attackerName === victimName) continue;
 
       for (const resource of victimProfile.owns) {
-        // lexis: assume resource format like "order:1001" -> path /orders/1001
-        // This is heuristic; real paths should be mapped by caller or config.
-        const [resourceType, resourceId] = resource.split(':');
-        const path = `/${resourceType}s/${resourceId}`;
+        const path = probePathForResource(resource, endpoints);
+        if (!path) continue;
 
         try {
           const resp = await engine.fetch(path, 'GET', attackerHeaders);
@@ -114,7 +172,8 @@ export async function testBOLA(
 export async function testBFLA(
   _target: string,
   config: Lexisrc,
-  engine: HttpEngine
+  engine: HttpEngine,
+  endpoints?: Endpoint[]
 ): Promise<Finding[]> {
   const findings: Finding[] = [];
   const profiles = Object.entries(config.auth.profiles);
@@ -125,9 +184,9 @@ export async function testBFLA(
     return findings;
   }
 
-  // lexis: heuristic admin endpoints. In practice these should be discovered
-  // from OpenAPI spec or config. Using common patterns for MVP.
-  const adminPaths = ['/admin/users', '/admin/roles', '/admin/config'];
+  // lexis: spec-driven admin paths when a spec is provided (no guessing);
+  // hard-coded common patterns are the no-spec fallback for MVP.
+  const adminPaths = adminProbePaths(endpoints);
 
   for (const [stdName, stdProfile] of standardProfiles) {
     const headers = getAuthHeader(stdProfile);
