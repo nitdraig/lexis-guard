@@ -6,6 +6,19 @@ export interface Endpoint {
   path: string;
   operationId?: string;
   summary?: string;
+  /** JSON Schema for the 200 response body, when declared in the spec. */
+  responseSchema?: unknown;
+}
+
+/**
+ * Extract the 200 response JSON Schema from an OpenAPI operation, if present.
+ */
+function extractResponseSchema(operation: OpenAPI.Operation): unknown | undefined {
+  const response = operation.responses?.['200'] ?? operation.responses?.['201'];
+  if (!response || !('content' in response)) return undefined;
+  const jsonContent = response.content?.['application/json'];
+  if (!jsonContent?.schema) return undefined;
+  return jsonContent.schema;
 }
 
 /**
@@ -28,7 +41,8 @@ export async function discoverEndpoints(specPathOrUrl: string): Promise<Endpoint
           method: method.toUpperCase(),
           path,
           operationId: operation.operationId,
-          summary: operation.summary
+          summary: operation.summary,
+          responseSchema: extractResponseSchema(operation)
         });
       }
     }

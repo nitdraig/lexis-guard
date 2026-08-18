@@ -2,6 +2,35 @@ import { readFileSync } from 'node:fs';
 import type { Finding } from '../types/finding.js';
 import type { AuditLogEntry } from '../core/audit-log.js';
 
+export interface SessionTrend {
+  /** Previous session timestamp for the same target, if available. */
+  previousRunAt: string | null;
+  /** Previous session findings count. */
+  previousCount: number;
+  /** Current session findings count. */
+  currentCount: number;
+  /** Count delta: currentCount - previousCount. */
+  delta: number;
+}
+
+/**
+ * Coarse count-based trend between a session and the previous session
+ * for the same target. The audit log stores counts only, so this is a
+ * delta, not a full finding diff.
+ */
+export function computeSessionTrend(
+  current: { timestamp: string; findingsCount: number },
+  previous: { timestamp: string; findingsCount: number } | null
+): SessionTrend {
+  const previousCount = previous?.findingsCount ?? 0;
+  return {
+    previousRunAt: previous?.timestamp ?? null,
+    previousCount,
+    currentCount: current.findingsCount,
+    delta: current.findingsCount - previousCount
+  };
+}
+
 export interface TrendResult {
   /** Findings present in previous run but not in current. */
   resolved: string[];

@@ -1,0 +1,17 @@
+# Example GitLab CI job that runs a LexisGuard one-shot audit.
+# Copy the job into your .gitlab-ci.yml and configure your target.
+api_audit:
+  image: node:22
+  variables:
+    LEXIS_USER_A_TOKEN: $LEXIS_USER_A_TOKEN
+    LEXIS_USER_B_TOKEN: $LEXIS_USER_B_TOKEN
+    LEXIS_ADMIN_TOKEN: $LEXIS_ADMIN_TOKEN
+  before_script:
+    - npm install -g lexisguard-cli
+  script:
+    - lexisg-cli --target https://api.example.com --format sarif --threshold 7.0 --output lexisguard.sarif
+  artifacts:
+    when: always
+    paths:
+      - lexisguard.sarif
+    expire_in: 1 week

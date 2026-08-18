@@ -12,6 +12,11 @@ export interface AuditModule {
   readonly id: string;
   /** Human-readable name. */
   readonly name: string;
+  /**
+   * True when the module sends mutating or potentially destructive payloads.
+   * Such modules are gated behind explicit user/CI confirmation.
+   */
+  readonly requiresEscalation?: boolean;
 
   /**
    * Run the audit against the target.

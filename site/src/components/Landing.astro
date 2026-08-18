@@ -1,0 +1,79 @@
+---
+import type { LandingCopy } from '../i18n/types';
+
+interface Props {
+  copy: LandingCopy;
+}
+
+const { copy } = Astro.props;
+---
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <span class="badge">{copy.hero.badge}</span>
+      <h1>{copy.hero.title}</h1>
+      <p class="tagline">{copy.hero.tagline}</p>
+      <div class="install">{copy.hero.install}</div>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#features">{copy.hero.primaryCta}</a>
+        <a class="btn btn-secondary" href="https://github.com/nitdraig/lexis-guard" rel="noopener" target="_blank">{copy.hero.secondaryCta}</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="features">
+    <div class="wrap">
+      <h2>{copy.features.heading}</h2>
+      <p>{copy.features.subheading}</p>
+      <div class="grid">
+        {copy.features.items.map((item) => (
+          <div class="card">
+            <h3>{item.title}</h3>
+            <p>{item.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="usage">
+    <div class="wrap">
+      <h2>{copy.usage.heading}</h2>
+      <p>{copy.usage.text}</p>
+      <div class="command-block">{copy.usage.command}</div>
+      <p class="note">{copy.usage.note}</p>
+    </div>
+  </section>
+
+  <section class="section" id="config">
+    <div class="wrap">
+      <h2>{copy.config.heading}</h2>
+      <p>{copy.config.text}</p>
+      <div class="config-example">{copy.config.example}</div>
+      <p class="note" style="margin-top: 0.75rem">{copy.config.note}</p>
+    </div>
+  </section>
+
+  <section class="section" id="ai">
+    <div class="wrap">
+      <h2>{copy.ai.heading}</h2>
+      <p>{copy.ai.text}</p>
+      <div class="ai-columns">
+        <div class="ai-column">
+          <h3>{copy.ai.cloud}</h3>
+          <ul>
+            {copy.ai.cloudItems.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+        <div class="ai-column">
+          <h3>{copy.ai.local}</h3>
+          <ul>
+            {copy.ai.localItems.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+      </div>
+      <p class="offline-note">{copy.ai.offline}</p>
+    </div>
+  </section>
+</main>

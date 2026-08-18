@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { Select, Spinner } from '@inkjs/ui';
 import { AuditLog, type SavedSession } from '../../core/audit-log.js';
+import { computeSessionTrend } from '../../core/trending.js';
+import { compareSessions } from '../../core/regression.js';
 import { FindingsPanel } from '../components/findings-panel.js';
 
 interface HistoryViewProps {
@@ -27,6 +29,13 @@ export function HistoryView({ onBack, onLoadSession }: HistoryViewProps): React.
 
   if (selected) {
     const { meta, findings } = selected;
+    const previous = (sessions ?? []).find((s) => s.meta.target === meta.target && s !== selected) ?? null;
+    const trend = computeSessionTrend(
+      { timestamp: meta.timestamp, findingsCount: findings.length },
+      previous ? { timestamp: previous.meta.timestamp, findingsCount: previous.findings.length } : null
+    );
+    const sign = trend.delta > 0 ? '+' : '';
+    const regression = compareSessions(previous, selected.findings);
     return (
       <Box flexDirection="column" padding={1} gap={1}>
         <Text bold color="cyan">
@@ -44,6 +53,28 @@ export function HistoryView({ onBack, onLoadSession }: HistoryViewProps): React.
           </Text>
           {meta.incomplete && <Text color="redBright">[INCOMPLETE]</Text>}
         </Box>
+        <Box>
+          <Text>
+            Trend:{' '}
+            {trend.previousRunAt ? (
+              <Text color={trend.delta > 0 ? 'red' : trend.delta < 0 ? 'green' : 'yellow'}>
+                {trend.previousCount} → {trend.currentCount} findings ({sign}{trend.delta})
+              </Text>
+            ) : (
+              <Text dimColor>no previous run for this target</Text>
+            )}
+          </Text>
+        </Box>
+        {previous && (
+          <Box>
+            <Text>
+              Regression:{' '}
+              <Text color="green">resolved {regression.resolved.length}</Text>{' · '}
+              <Text color="red">new {regression.new.length}</Text>{' · '}
+              <Text color="yellow">persistent {regression.persistent.length}</Text>
+            </Text>
+          </Box>
+        )}
         <FindingsPanel findings={findings} />
         <Box marginTop={1}>
           <Select

@@ -17,6 +17,8 @@ export interface DedupedFinding extends Finding {
   count: number;
   /** The worst severity seen across all duplicates. */
   worst_case: Severity;
+  /** Composite risk score (CVSS amplified by frequency), set post-dedupe. */
+  riskScore?: number;
 }
 
 /**

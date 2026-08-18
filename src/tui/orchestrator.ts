@@ -1,12 +1,14 @@
 import type { Finding } from '../types/finding.js';
 import type { Lexisrc } from '../config/lexisrc-schema.js';
 import type { HttpEngine } from '../core/http-engine.js';
+import type { EscalationGate } from '../core/escalation-gate.js';
 import type { AuditModule } from '../modules/audit-module.js';
+import type { Endpoint } from '../openapi/parser.js';
 
 export interface OrchestratorProgress {
   moduleId: string;
   name: string;
-  status: 'pending' | 'running' | 'done' | 'error';
+  status: 'pending' | 'running' | 'done' | 'error' | 'skipped';
   findings: Finding[];
   errorMessage?: string;
   elapsedMs?: number;
@@ -29,17 +31,26 @@ export async function runAudit(
   target: string,
   config: Lexisrc,
   engine: HttpEngine,
-  callbacks: OrchestratorCallbacks
+  callbacks: OrchestratorCallbacks,
+  escalationGate?: EscalationGate,
+  endpoints?: Endpoint[]
 ): Promise<void> {
   const t0 = Date.now();
   const allFindings: Finding[] = [];
 
   for (const mod of modules) {
     const modT0 = Date.now();
+
+    // Gated modules are skipped unless the gate explicitly allows them.
+    if (mod.requiresEscalation && escalationGate && !escalationGate.isAllowed(mod.id)) {
+      callbacks.onProgress({ moduleId: mod.id, name: mod.name, status: 'skipped', findings: [], elapsedMs: 0 });
+      continue;
+    }
+
     callbacks.onProgress({ moduleId: mod.id, name: mod.name, status: 'running', findings: [], elapsedMs: 0 });
 
     try {
-      const findings = await mod.run(target, config, engine, callbacks.onFinding);
+      const findings = await mod.run(target, config, engine, callbacks.onFinding, endpoints);
       allFindings.push(...findings);
       callbacks.onProgress({ moduleId: mod.id, name: mod.name, status: 'done', findings, elapsedMs: Date.now() - modT0 });
     } catch (err) {

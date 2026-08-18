@@ -29,7 +29,6 @@ Always run `npm run build`, `npx tsc --noEmit` and `npm test` before finishing.
 ```
 src/
   cli.ts              # entry point: flags, one-shot pipeline, workbench bootstrap
-  wizard.ts           # legacy interactive flow (dead code, not imported — do not revive)
   config/             # .lexisrc.json schemas, parsers, loader, env interpolation, secrets
   core/               # scope-guard, auth-guard, throttle, http-engine, sanitizer,
                       # deduplicator, audit-log (+ sessions), trending
@@ -97,7 +96,7 @@ tests/                # vitest suites, mirroring src/ (core, config, modules, ai
 
 ## Code style
 
-- English everywhere (identifiers, comments, docs, UI). No Spanish in `src/`.
+- Code and comments in English; docs/ may be written in Spanish (team language). No Spanish in `src/`.
 - TS strict; no `any`, no `unknown` where a type exists, no lying assertions.
 - Targeted edits; never rewrite a file wholesale without a reason.
 - Mark intentional simplifications with a `// lexis:` comment explaining the ceiling /

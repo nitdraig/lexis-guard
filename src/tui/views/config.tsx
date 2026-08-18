@@ -51,7 +51,9 @@ export function ConfigView({ session, onUpdateRaw, onUpdatePath, onBack }: Confi
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   useInput((_input, key) => {
-    if (key.escape && action !== 'menu') setAction('menu');
+    if (!key.escape) return;
+    if (action !== 'menu') setAction('menu');
+    else onBack();
   });
 
   const raw = session.rawConfig;

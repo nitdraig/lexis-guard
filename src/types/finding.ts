@@ -23,4 +23,6 @@ export interface Finding {
   cwe?: string;
   /** CVSS v3.1 score (DAST-based, not certified). */
   cvss?: number;
+  /** OWASP API Security Top 10 category (e.g. "API1:2023"). */
+  owasp?: string;
 }

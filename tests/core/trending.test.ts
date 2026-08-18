@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeTrend } from '../../src/core/trending.js';
+import { computeTrend, computeSessionTrend } from '../../src/core/trending.js';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -42,5 +42,29 @@ describe('computeTrend', () => {
     expect(trend.previousRunAt).toBe('2024-01-02T00:00:00Z');
     expect(trend.previousCount).toBe(3);
     expect(trend.currentCount).toBe(2);
+  });
+});
+
+describe('computeSessionTrend', () => {
+  it('returns a zero baseline when no previous session exists', () => {
+    const trend = computeSessionTrend(
+      { timestamp: '2024-01-02T00:00:00Z', findingsCount: 4 },
+      null
+    );
+    expect(trend.previousRunAt).toBeNull();
+    expect(trend.previousCount).toBe(0);
+    expect(trend.currentCount).toBe(4);
+    expect(trend.delta).toBe(4);
+  });
+
+  it('computes a count delta against the previous session', () => {
+    const trend = computeSessionTrend(
+      { timestamp: '2024-01-03T00:00:00Z', findingsCount: 2 },
+      { timestamp: '2024-01-02T00:00:00Z', findingsCount: 5 }
+    );
+    expect(trend.previousRunAt).toBe('2024-01-02T00:00:00Z');
+    expect(trend.previousCount).toBe(5);
+    expect(trend.currentCount).toBe(2);
+    expect(trend.delta).toBe(-3);
   });
 });

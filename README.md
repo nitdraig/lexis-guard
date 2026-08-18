@@ -61,7 +61,15 @@ lexisg-cli --target api.example.com --format json --output report.json
 lexisg-cli --target api.example.com --format sarif -o report.sarif
 ```
 
-Run `lexisg-cli --help` for all options (`--config`, `--mode`, `--spec`, `--json`, `--tui`, `--threshold`).
+Run `lexisg-cli --help` for all options (`--config`, `--mode`, `--spec`, `--format`, `--output`, `--json`, `--tui`, `--threshold`, `--allow-exploitation`, `--completion`).
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Audit completed; no finding at or above the severity threshold. |
+| `1` | Severity threshold exceeded (CI should fail), or an unrecoverable audit error. |
+| `2` | Invalid usage (for example, the workbench was requested without a TTY). |
 
 ## Configuration
 

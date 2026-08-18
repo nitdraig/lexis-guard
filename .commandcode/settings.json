@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(node --version)",
+      "Shell(npm:*)",
+      "Shell(npx vitest run tests/core/http-engine.test.ts)",
+      "Shell(Remove-Item:*)",
+      "Shell(rmdir:*)",
+      "Shell(del:*)",
+      "Shell(findstr:*)",
+      "Shell(node -p \"require('./node_modules/ajv/package.json').version\")",
+      "Shell(npx tsc --noEmit)",
+      "Shell(node -e console.log(require('fs').existsSync('node_modules/@types/node')))",
+      "Shell(node -e \"console.log(require('fs').existsSync('node_modules/@types/node'))\")"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

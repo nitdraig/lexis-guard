@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { Select } from '@inkjs/ui';
 import { StatusBar } from './components/status-bar.js';
 import { ModuleProgress } from './components/module-progress.js';
 import { FindingsPanel } from './components/findings-panel.js';
@@ -11,6 +12,13 @@ import { HttpEngine } from '../core/http-engine.js';
 import { SecurityModule } from '../modules/security-module.js';
 import { PerformanceModule } from '../modules/performance-module.js';
 import { ScalabilityModule } from '../modules/scalability-module.js';
+import { InjectionModule } from '../modules/injection-module.js';
+import { SsrfModule } from '../modules/ssrf-module.js';
+import { JwtModule } from '../modules/jwt-module.js';
+import { SecretsScanner } from '../modules/secrets-scanner.js';
+import { ContractModule } from '../modules/contract-module.js';
+import { EscalationGate } from '../core/escalation-gate.js';
+import type { AuditModule } from '../modules/audit-module.js';
 
 interface AuditScreenProps {
   target: string;
@@ -21,11 +29,25 @@ interface AuditScreenProps {
   onExit?: () => void;
 }
 
-const INITIAL_MODULES: OrchestratorProgress[] = [
-  { moduleId: 'security', name: 'Security', status: 'pending', findings: [] },
-  { moduleId: 'performance', name: 'Performance', status: 'pending', findings: [] },
-  { moduleId: 'scalability', name: 'Scalability', status: 'pending', findings: [] }
+const AUDIT_MODULES: AuditModule[] = [
+  new SecurityModule(),
+  new PerformanceModule(),
+  new ScalabilityModule(),
+  new InjectionModule(),
+  new SsrfModule(),
+  new JwtModule(),
+  new SecretsScanner(),
+  new ContractModule()
 ];
+
+const INITIAL_MODULES: OrchestratorProgress[] = AUDIT_MODULES.map((m) => ({
+  moduleId: m.id,
+  name: m.name,
+  status: 'pending',
+  findings: []
+}));
+
+type Escalation = 'idle' | 'allow' | 'skip';
 
 export function AuditScreen({ target, config, onComplete, onExit }: AuditScreenProps): React.ReactElement {
   const [phase, setPhase] = useState<'connecting' | 'running' | 'done' | 'error'>('connecting');
@@ -35,10 +57,14 @@ export function AuditScreen({ target, config, onComplete, onExit }: AuditScreenP
   const [durationMs, setDurationMs] = useState(0);
   const [requests, setRequests] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [escalation, setEscalation] = useState<Escalation>('idle');
   const completedRef = useRef(false);
   const startedAtRef = useRef<number | null>(null);
 
   const engineRef = useRef<HttpEngine | null>(null);
+
+  const gatedModules = AUDIT_MODULES.filter((m) => m.requiresEscalation);
+  const needsEscalationPrompt = gatedModules.length > 0;
 
   useInput((_input, key) => {
     if (key.escape) onExit?.();
@@ -57,6 +83,9 @@ export function AuditScreen({ target, config, onComplete, onExit }: AuditScreenP
   }, [phase]);
 
   useEffect(() => {
+    // With gated modules present, wait for the explicit escalation decision.
+    if (needsEscalationPrompt && escalation === 'idle') return;
+
     let cancelled = false;
 
     const engine = new HttpEngine({
@@ -84,9 +113,9 @@ export function AuditScreen({ target, config, onComplete, onExit }: AuditScreenP
       startedAtRef.current = Date.now();
       setPhase('running');
 
-      const auditModules = [new SecurityModule(), new PerformanceModule(), new ScalabilityModule()];
+      const escalationGate = new EscalationGate(escalation === 'allow');
 
-      await runAudit(auditModules, target, config, engine, {
+      await runAudit(AUDIT_MODULES, target, config, engine, {
         onFinding: (finding) => {
           if (!cancelled) setFindings((prev) => [...prev, finding]);
         },
@@ -114,7 +143,7 @@ export function AuditScreen({ target, config, onComplete, onExit }: AuditScreenP
           if (!cancelled) setErrorMsg(err.message);
           engine.close().catch(() => {});
         }
-      });
+      }, escalationGate);
     }
 
     execute();
@@ -123,7 +152,7 @@ export function AuditScreen({ target, config, onComplete, onExit }: AuditScreenP
       cancelled = true;
       engine.close().catch(() => {});
     };
-  }, [target, config]);
+  }, [target, config, escalation, needsEscalationPrompt]);
 
   if (errorMsg) {
     return (
@@ -131,6 +160,28 @@ export function AuditScreen({ target, config, onComplete, onExit }: AuditScreenP
         <Text bold color="red">LexisGuard — Error</Text>
         <Text color="red">{errorMsg}</Text>
         <Text dimColor>Press Esc to return</Text>
+      </Box>
+    );
+  }
+
+  if (needsEscalationPrompt && escalation === 'idle' && phase === 'connecting') {
+    const names = gatedModules.map((m) => m.name).join(', ');
+    return (
+      <Box flexDirection="column" padding={1} gap={1}>
+        <Text bold color="yellow">Active exploitation modules</Text>
+        <Text>
+          This audit includes modules that send mutating or potentially destructive payloads:{' '}
+          <Text color="red">{names}</Text>
+        </Text>
+        <Text dimColor>Choose how to proceed before the audit starts.</Text>
+        <Select
+          options={[
+            { label: `Run active exploitation modules (${names})`, value: 'allow' },
+            { label: 'Skip active exploitation modules (safe)', value: 'skip' }
+          ]}
+          onChange={(value) => setEscalation(value as 'allow' | 'skip')}
+        />
+        <Text dimColor>Esc to go back</Text>
       </Box>
     );
   }

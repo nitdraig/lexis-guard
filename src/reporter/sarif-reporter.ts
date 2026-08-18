@@ -58,7 +58,9 @@ export class SarifReporter implements Reporter {
         count: f.count,
         worst_case: f.worst_case,
         evidence: f.evidence,
-        cvss_dast: f.cvss ?? null
+        cvss_dast: f.cvss ?? null,
+        risk_score: f.riskScore ?? null,
+        owasp: f.owasp ?? null
       }
     };
 

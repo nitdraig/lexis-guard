@@ -1,6 +1,7 @@
 import type { Reporter, ReportMeta } from './reporter.js';
 import type { DedupedFinding } from '../core/deduplicator.js';
 import type { Lexisignore } from '../config/lexisignore-schema.js';
+import { renderExecutiveSummary } from './executive-summary.js';
 
 export class MarkdownReporter implements Reporter {
   readonly format = 'markdown';
@@ -28,6 +29,8 @@ export class MarkdownReporter implements Reporter {
     }
     lines.push('');
 
+    lines.push(...renderExecutiveSummary(findings));
+
     lines.push('## Findings');
     for (const f of findings) {
       lines.push(`### ${f.rule_id}`);
@@ -37,6 +40,8 @@ export class MarkdownReporter implements Reporter {
       lines.push(`- **Count**: ${f.count}`);
       if (f.cwe) lines.push(`- **CWE**: ${f.cwe}`);
       if (f.cvss !== undefined) lines.push(`- **CVSS (DAST)**: ${f.cvss}`);
+      if (f.riskScore !== undefined) lines.push(`- **Risk score**: ${f.riskScore}`);
+      if (f.owasp) lines.push(`- **OWASP**: ${f.owasp}`);
       lines.push(`- **Evidence**: ${f.evidence}`);
       lines.push('');
     }

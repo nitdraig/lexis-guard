@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { Select, TextInput, StatusMessage } from '@inkjs/ui';
 import { AuditScreen } from '../audit-screen.js';
 import { parseLexisrc } from '../../config/lexisrc-parser.js';
@@ -20,6 +20,18 @@ export function AuditView({ session, onStoreFindings, onAddTarget, onBack }: Aud
   const [target, setTarget] = useState<string | null>(null);
   const [custom, setCustom] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useInput((_input, key) => {
+    if (!key.escape) return;
+    if (custom) {
+      setCustom(false);
+      setMessage(null);
+    } else if (target) {
+      setTarget(null);
+    } else {
+      onBack();
+    }
+  });
 
   if (targets.length === 0) {
     return (

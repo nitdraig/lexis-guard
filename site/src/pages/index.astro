@@ -1,0 +1,22 @@
+---
+// Static GitHub Pages cannot read Accept-Language server-side, so redirect on
+// the client using the browser's preferred language (default: English).
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="refresh" content="0; url=en/" />
+    <title>LexisGuard</title>
+    <script>
+      const base = import.meta.env.BASE_URL;
+      const lang = (navigator.language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en';
+      window.location.replace(base + lang + '/');
+    </script>
+  </head>
+  <body>
+    <a href="en/">English</a> · <a href="es/">Español</a>
+  </body>
+</html>

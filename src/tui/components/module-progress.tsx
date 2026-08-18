@@ -6,20 +6,27 @@ const statusColor: Record<string, string> = {
   pending: 'gray',
   running: 'yellow',
   done: 'green',
-  error: 'red'
+  error: 'red',
+  skipped: 'dim'
 };
 
 const statusLabel: Record<string, string> = {
   pending: '...',
   running: 'RUNNING',
   done: 'DONE',
-  error: 'ERROR'
+  error: 'ERROR',
+  skipped: 'SKIPPED'
 };
 
 const MODULE_DESCRIPTIONS: Record<string, string> = {
   security: 'OWASP checks: headers, CORS, sensitive files, JWT cookies, BOLA/BFLA cross-auth',
   performance: 'Latency, TTFB, payload compression, HTTP/2 support',
-  scalability: 'Rate-limit burst (10 req), soak load, circuit breaker state'
+  scalability: 'Rate-limit burst (10 req), soak load, circuit breaker state',
+  injection: 'SQLi, NoSQLi, command injection and path traversal probes',
+  ssrf: 'URL-accepting parameter probes against localhost / metadata endpoints',
+  jwt: 'JWT alg none, weak-secret and algorithm-confusion vectors',
+  secrets: 'API keys, private keys and passwords leaked in responses',
+  contract: 'Response bodies validated against OpenAPI-declared schemas'
 };
 
 function formatElapsed(ms: number | undefined): string {

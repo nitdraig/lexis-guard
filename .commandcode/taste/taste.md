@@ -1,1 +1,7 @@
-- Prefiere comunicarse en español (español informal, sin tildes). Confidence: 0.8
+- Prefiere comunicarse en español (tuteo/informal); omite tildes en mensajes cortos pero sí usa tildes en frases elaboradas. Confidence: 0.85
+- Trabaja a partir de documentos de plan en markdown (p. ej. landing-npm-plan.md, implementation-strategy.md) y espera que se lean y sigan al implementar; suele empezar pidiendo revisar el doc antes de decidir el alcance. Confidence: 0.7
+- En un proyecto de landing site desplegada en la raíz del dominio (GitHub Pages), espera que el `base` de Astro sea `/` (no un subpath tipo `/repo/`). Confidence: 0.7
+- Su entorno de desarrollo tiene `NODE_ENV=production`, lo que hace que `npm install`/`npm ci` omitan `devDependencies` (p. ej. `@types/node`); hay que forzar `NODE_ENV=development` para instalar dependencias de desarrollo. Confidence: 0.7
+- Estructura el trabajo en fases priorizadas e incrementales (v1.0 shippeable → profundizar seguridad → calidad/CI-CD → backlog futuro) y pide revisar el estado completo del proyecto antes de armar el plan de implementación. Confidence: 0.7
+- Valora entregables de producción completos: man page, exit codes documentados, shell completions, empaquetado npm, templates de CI, imagen Docker y múltiples formatos de reporte. Confidence: 0.6
+- Busca alinear resultados con estándares de seguridad conocidos (p. ej. mapeo OWASP API Top 10) y endurecer detecciones para reducir falsos positivos. Confidence: 0.55

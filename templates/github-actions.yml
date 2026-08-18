@@ -1,0 +1,35 @@
+# Example GitHub Actions job that runs a LexisGuard one-shot audit.
+# Copy this into .github/workflows/lexisguard.yml and configure your target.
+name: API audit
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  lexisguard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install -g lexisguard-cli
+      - name: Run audit
+        env:
+          LEXIS_USER_A_TOKEN: ${{ secrets.LEXIS_USER_A_TOKEN }}
+          LEXIS_USER_B_TOKEN: ${{ secrets.LEXIS_USER_B_TOKEN }}
+          LEXIS_ADMIN_TOKEN: ${{ secrets.LEXIS_ADMIN_TOKEN }}
+        run: |
+          lexisg-cli \
+            --target https://api.example.com \
+            --format sarif \
+            --threshold 7.0 \
+            --output lexisguard.sarif
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lexisguard-sarif
+          path: lexisguard.sarif
