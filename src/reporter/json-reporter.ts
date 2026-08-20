@@ -1,6 +1,7 @@
 import type { Reporter, ReportMeta } from './reporter.js';
 import type { DedupedFinding } from '../core/deduplicator.js';
 import type { Lexisignore } from '../config/lexisignore-schema.js';
+import { COMPLIANCE_DISCLAIMER } from './compliance-mapping.js';
 
 export class JsonReporter implements Reporter {
   readonly format = 'json';
@@ -10,6 +11,7 @@ export class JsonReporter implements Reporter {
     meta: ReportMeta,
     lexisignore?: Lexisignore
   ): string {
+    const hasCompliance = findings.some((f) => f.compliance && Object.keys(f.compliance).length > 0);
     const report = {
       meta,
       summary: {
@@ -17,7 +19,8 @@ export class JsonReporter implements Reporter {
         by_severity: this.groupBySeverity(findings)
       },
       findings,
-      suppressions: lexisignore?.ignore ?? []
+      suppressions: lexisignore?.ignore ?? [],
+      disclaimer: hasCompliance ? COMPLIANCE_DISCLAIMER : undefined
     };
     return JSON.stringify(report, null, 2);
   }

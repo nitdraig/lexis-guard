@@ -26,6 +26,12 @@ export function defaultRawLexisrc(): RawLexisrc {
       redact_target: true,
       local_fallback: true
     },
+    plugins: {},
+    websocket: {},
+    fuzzing: { wordlists: [], mutations: 5, max_cases: 100 },
+    oauth: { scopes: [], pkce: false },
+    compliance: { frameworks: [] },
+    business_logic: { workflows: [], price_params: [] },
     limits: {
       max_concurrent_requests: 20,
       max_requests_per_test: 500,

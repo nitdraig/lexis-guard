@@ -16,6 +16,10 @@ export function getAuthHeaders(profile: AuthProfile): AuthHeaders {
       const encoded = Buffer.from(profile.token).toString('base64');
       return { Authorization: `Basic ${encoded}` };
     }
+    case 'oauth2':
+    case 'oidc':
+      // lexis: OAuth/OIDC tokens are bearer tokens obtained out-of-band
+      return { Authorization: `Bearer ${profile.token}` };
     default: {
       const _exhaustive: never = profile.type;
       throw new Error(`Unsupported auth type: ${_exhaustive}`);

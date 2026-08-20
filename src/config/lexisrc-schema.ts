@@ -1,10 +1,51 @@
 import { z } from 'zod';
 
-const authTypeSchema = z.enum(['bearer', 'api_key', 'basic']);
+const authTypeSchema = z.enum(['bearer', 'api_key', 'basic', 'oauth2', 'oidc']);
 const roleSchema = z.enum(['standard', 'admin']);
 const modeSchema = z.enum(['safe', 'aggressive']);
 const profileSchema = z.enum(['quick', 'deep']);
 const aiProviderSchema = z.enum(['openai', 'deepseek', 'anthropic', 'ollama', 'lmstudio']);
+
+const pluginsSchema = z.object({
+  enabled: z.array(z.string().min(1)).optional(),
+  disabled: z.array(z.string().min(1)).optional()
+}).optional().default({});
+
+const websocketSchema = z.object({
+  endpoint: z.string().min(1).optional()
+}).optional().default({});
+
+const fuzzingSchema = z.object({
+  wordlists: z.array(z.string().min(1)).optional().default([]),
+  mutations: z.number().int().min(1).max(20).default(5),
+  max_cases: z.number().int().min(1).max(1000).default(100)
+}).optional().default({
+  wordlists: [],
+  mutations: 5,
+  max_cases: 100
+});
+
+const oauthSchema = z.object({
+  authorization_server: z.string().min(1).optional(),
+  well_known: z.string().min(1).optional(),
+  client_id: z.string().min(1).optional(),
+  client_secret: z.string().optional(),
+  redirect_uri: z.string().min(1).optional(),
+  scopes: z.array(z.string().min(1)).optional().default([]),
+  pkce: z.boolean().optional().default(false)
+}).optional().default({});
+
+const complianceSchema = z.object({
+  frameworks: z.array(z.enum(['nist_csf', 'soc2', 'iso27001', 'pci_dss', 'hipaa'])).optional().default([])
+}).optional().default({ frameworks: [] });
+
+const businessLogicSchema = z.object({
+  workflows: z.array(z.object({
+    name: z.string().min(1),
+    steps: z.array(z.string().min(1))
+  })).optional().default([]),
+  price_params: z.array(z.string().min(1)).optional().default([])
+}).optional().default({ workflows: [], price_params: [] });
 
 /**
  * Raw profile as it appears in JSON (token may contain ${ENV_VAR}).
@@ -53,6 +94,12 @@ export const rawLexisrcSchema = z.object({
     model: z.string().min(1).optional(),
     api_key: z.string().optional()
   }),
+  plugins: pluginsSchema,
+  websocket: websocketSchema,
+  fuzzing: fuzzingSchema,
+  oauth: oauthSchema,
+  compliance: complianceSchema,
+  business_logic: businessLogicSchema,
   limits: z.object({
     max_concurrent_requests: z.number().int().positive().default(20),
     max_requests_per_test: z.number().int().positive().default(500),
@@ -86,6 +133,12 @@ export const lexisrcSchema = z.object({
     model: z.string().min(1),
     api_key: z.string()
   }),
+  plugins: pluginsSchema,
+  websocket: websocketSchema,
+  fuzzing: fuzzingSchema,
+  oauth: oauthSchema,
+  compliance: complianceSchema,
+  business_logic: businessLogicSchema,
   limits: z.object({
     max_concurrent_requests: z.number().int().positive(),
     max_requests_per_test: z.number().int().positive(),

@@ -2,6 +2,7 @@ import type { Reporter, ReportMeta } from './reporter.js';
 import type { DedupedFinding } from '../core/deduplicator.js';
 import type { Lexisignore } from '../config/lexisignore-schema.js';
 import { buildExecutiveSummary } from './executive-summary.js';
+import { COMPLIANCE_DISCLAIMER } from './compliance-mapping.js';
 
 const SEVERITY_COLORS: Record<string, string> = {
   info: '#4aa3df',
@@ -36,6 +37,7 @@ export class HtmlReporter implements Reporter {
       .map((f) => {
         const severity = f.worst_case ?? f.severity;
         const color = SEVERITY_COLORS[severity] ?? '#ffffff';
+        const compliance = f.compliance ? Object.entries(f.compliance).map(([k, v]) => `${k}: ${v}`).join(', ') : '—';
         return `<tr>
   <td><span style="color:${color};font-weight:600">${escapeHtml(severity)}</span></td>
   <td><code>${escapeHtml(f.rule_id)}</code></td>
@@ -45,6 +47,7 @@ export class HtmlReporter implements Reporter {
   <td>${f.cvss ?? '—'}</td>
   <td>${f.riskScore ?? '—'}</td>
   <td>${f.owasp ? escapeHtml(f.owasp) : '—'}</td>
+  <td>${escapeHtml(compliance)}</td>
 </tr>`;
       })
       .join('\n');
@@ -91,17 +94,20 @@ ${summary.topRisks.length > 0 ? `<h3>Top risks</h3><ul>${summary.topRisks
 <thead>
 <tr>
   <th>Severity</th><th>Rule</th><th>Location</th><th>Description</th>
-  <th>Count</th><th>CVSS</th><th>Risk</th><th>OWASP</th>
+  <th>Count</th><th>CVSS</th><th>Risk</th><th>OWASP</th><th>Compliance</th>
 </tr>
 </thead>
 <tbody>
-${rows || '<tr><td colspan="8">No findings</td></tr>'}
+${rows || '<tr><td colspan="9">No findings</td></tr>'}
 </tbody>
 </table>
 
 ${suppressions.length > 0 ? `<h2>Suppressions</h2><ul>${suppressions
       .map((s) => `<li><code>${escapeHtml(s.rule_id)}</code> on <code>${escapeHtml(s.method)} ${escapeHtml(s.path)}</code> — ${escapeHtml(s.reason)}</li>`)
       .join('')}</ul>` : ''}
+
+${findings.some((f) => f.compliance && Object.keys(f.compliance).length > 0)
+      ? `<p><small>${escapeHtml(COMPLIANCE_DISCLAIMER)}</small></p>` : ''}
 
 <p><small>CVSS scores are DAST-based estimates, not certified.</small></p>
 </body>

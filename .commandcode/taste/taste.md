@@ -5,3 +5,7 @@
 - Estructura el trabajo en fases priorizadas e incrementales (v1.0 shippeable → profundizar seguridad → calidad/CI-CD → backlog futuro) y pide revisar el estado completo del proyecto antes de armar el plan de implementación. Confidence: 0.7
 - Valora entregables de producción completos: man page, exit codes documentados, shell completions, empaquetado npm, templates de CI, imagen Docker y múltiples formatos de reporte. Confidence: 0.6
 - Busca alinear resultados con estándares de seguridad conocidos (p. ej. mapeo OWASP API Top 10) y endurecer detecciones para reducir falsos positivos. Confidence: 0.55
+- Prefiere que los módulos que envían payloads mutantes/destructivos queden "gated" detrás de un escalation gate (confirmación explícita en TUI o flag --allow-exploitation) antes de ejecutarse. Confidence: 0.75
+- Usa comentarios marcadores `// lexis:` para documentar decisiones diferidas, simplificaciones deliberadas y mitigaciones de falsos positivos. Confidence: 0.7
+- Escribe TypeScript estricto: evita `any`, usa switches exhaustivos con `never` y valida con `npx tsc --noEmit` como parte de la verificación. Confidence: 0.6
+- Prefiere scoring de seguridad determinista y explicable por sobre decisiones de IA (la IA solo anota, no decide hallazgos). Confidence: 0.55

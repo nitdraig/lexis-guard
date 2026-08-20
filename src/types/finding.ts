@@ -25,4 +25,10 @@ export interface Finding {
   cvss?: number;
   /** OWASP API Security Top 10 category (e.g. "API1:2023"). */
   owasp?: string;
+  /** Fuzzing: the payload that produced this finding. */
+  payload?: string;
+  /** Fuzzing: mutation strategy that produced this finding. */
+  mutation?: string;
+  /** Compliance mappings, keyed by framework (informational only). */
+  compliance?: Record<string, string>;
 }

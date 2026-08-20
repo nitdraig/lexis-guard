@@ -8,6 +8,12 @@ import { SsrfModule } from '../modules/ssrf-module.js';
 import { JwtModule } from '../modules/jwt-module.js';
 import { SecretsScanner } from '../modules/secrets-scanner.js';
 import { ContractModule } from '../modules/contract-module.js';
+import { GraphQLModule } from '../modules/graphql-module.js';
+import { WebSocketModule } from '../modules/websocket-module.js';
+import { GrpcModule } from '../modules/grpc-module.js';
+import { FuzzingModule } from '../modules/fuzzing-module.js';
+import { OAuthModule } from '../modules/oauth-module.js';
+import { BusinessLogicModule } from '../modules/business-logic-module.js';
 
 const BUILTIN_VERSION = '1.0.0';
 
@@ -29,7 +35,13 @@ export function builtinPlugins(): AuditPlugin[] {
     asPlugin(new SsrfModule(), 'http'),
     asPlugin(new JwtModule(), 'http'),
     asPlugin(new SecretsScanner(), 'http'),
-    asPlugin(new ContractModule(), 'http')
+    asPlugin(new ContractModule(), 'http'),
+    asPlugin(new GraphQLModule(), 'graphql'),
+    asPlugin(new WebSocketModule(), 'websocket'),
+    asPlugin(new GrpcModule(), 'grpc'),
+    asPlugin(new FuzzingModule(), 'http'),
+    asPlugin(new OAuthModule(), 'http'),
+    asPlugin(new BusinessLogicModule(), 'http')
   ];
 }
 

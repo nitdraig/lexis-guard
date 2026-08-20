@@ -35,6 +35,9 @@ function getAuthHeader(profile: AuthProfile): Record<string, string> {
       return { 'X-API-Key': profile.token };
     case 'basic':
       return { Authorization: `Basic ${Buffer.from(profile.token).toString('base64')}` };
+    case 'oauth2':
+    case 'oidc':
+      return { Authorization: `Bearer ${profile.token}` };
     default: {
       const _exhaustive: never = profile.type;
       throw new Error(`Unsupported auth type: ${_exhaustive}`);

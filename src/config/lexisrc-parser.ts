@@ -139,6 +139,12 @@ export function parseLexisrc(content: string | unknown): ParseLexisrcResult {
         model: parsed.data.ai.model ?? defaultModel(parsed.data.ai.provider),
         api_key: parsed.data.ai.api_key ?? ''
       },
+      plugins: parsed.data.plugins,
+      websocket: parsed.data.websocket,
+      fuzzing: parsed.data.fuzzing,
+      oauth: parsed.data.oauth,
+      compliance: parsed.data.compliance,
+      business_logic: parsed.data.business_logic,
       limits: parsed.data.limits
     };
   } catch (err) {

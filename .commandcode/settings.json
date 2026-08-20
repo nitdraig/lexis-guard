@@ -11,7 +11,12 @@
       "Shell(node -p \"require('./node_modules/ajv/package.json').version\")",
       "Shell(npx tsc --noEmit)",
       "Shell(node -e console.log(require('fs').existsSync('node_modules/@types/node')))",
-      "Shell(node -e \"console.log(require('fs').existsSync('node_modules/@types/node'))\")"
+      "Shell(node -e \"console.log(require('fs').existsSync('node_modules/@types/node'))\")",
+      "Shell(set:*)",
+      "Shell(npx vitest run tests/config/oauth-profile.test.ts tests/modules/oauth-module.test.ts)",
+      "Shell(npx vitest run tests/reporter/compliance-mapping.test.ts)",
+      "Shell(npx vitest run tests/modules/business-logic-module.test.ts)",
+      "Shell(npx vitest run tests/plugins/marketplace.test.ts tests/plugins/registry.test.ts)"
     ],
     "deny": [],
     "defaultMode": "default"

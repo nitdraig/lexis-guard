@@ -17,6 +17,12 @@ function makeConfig(): Lexisrc {
       }
     },
     ai: { provider: 'anthropic', redact_target: true, local_fallback: false, model: 'm', api_key: '' },
+    plugins: {},
+    websocket: {},
+    fuzzing: { wordlists: [], mutations: 5, max_cases: 100 },
+    oauth: { scopes: [], pkce: false },
+    compliance: { frameworks: [] },
+    business_logic: { workflows: [], price_params: [] },
     limits: { max_concurrent_requests: 20, max_requests_per_test: 500, abort_on_latency_degradation_pct: 40 }
   };
 }

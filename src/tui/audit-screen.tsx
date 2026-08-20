@@ -9,16 +9,9 @@ import { runAudit, type OrchestratorProgress } from './orchestrator.js';
 import type { Finding } from '../types/finding.js';
 import type { Lexisrc } from '../config/lexisrc-schema.js';
 import { HttpEngine } from '../core/http-engine.js';
-import { SecurityModule } from '../modules/security-module.js';
-import { PerformanceModule } from '../modules/performance-module.js';
-import { ScalabilityModule } from '../modules/scalability-module.js';
-import { InjectionModule } from '../modules/injection-module.js';
-import { SsrfModule } from '../modules/ssrf-module.js';
-import { JwtModule } from '../modules/jwt-module.js';
-import { SecretsScanner } from '../modules/secrets-scanner.js';
-import { ContractModule } from '../modules/contract-module.js';
+import { defaultPluginRegistry } from '../plugins/registry.js';
 import { EscalationGate } from '../core/escalation-gate.js';
-import type { AuditModule } from '../modules/audit-module.js';
+import type { AuditPlugin } from '../plugins/plugin-types.js';
 
 interface AuditScreenProps {
   target: string;
@@ -29,29 +22,25 @@ interface AuditScreenProps {
   onExit?: () => void;
 }
 
-const AUDIT_MODULES: AuditModule[] = [
-  new SecurityModule(),
-  new PerformanceModule(),
-  new ScalabilityModule(),
-  new InjectionModule(),
-  new SsrfModule(),
-  new JwtModule(),
-  new SecretsScanner(),
-  new ContractModule()
-];
-
-const INITIAL_MODULES: OrchestratorProgress[] = AUDIT_MODULES.map((m) => ({
-  moduleId: m.id,
-  name: m.name,
-  status: 'pending',
-  findings: []
-}));
+function resolveModules(config: Lexisrc): AuditPlugin[] {
+  return defaultPluginRegistry().resolve(
+    config.plugins.enabled,
+    config.plugins.disabled
+  );
+}
 
 type Escalation = 'idle' | 'allow' | 'skip';
 
 export function AuditScreen({ target, config, onComplete, onExit }: AuditScreenProps): React.ReactElement {
   const [phase, setPhase] = useState<'connecting' | 'running' | 'done' | 'error'>('connecting');
-  const [modules, setModules] = useState<OrchestratorProgress[]>(INITIAL_MODULES);
+  const [modules, setModules] = useState<OrchestratorProgress[]>(() =>
+    resolveModules(config).map((m) => ({
+      moduleId: m.id,
+      name: m.name,
+      status: 'pending',
+      findings: []
+    }))
+  );
   const [findings, setFindings] = useState<Finding[]>([]);
   const [throttleState, setThrottleState] = useState('normal');
   const [durationMs, setDurationMs] = useState(0);
@@ -63,7 +52,8 @@ export function AuditScreen({ target, config, onComplete, onExit }: AuditScreenP
 
   const engineRef = useRef<HttpEngine | null>(null);
 
-  const gatedModules = AUDIT_MODULES.filter((m) => m.requiresEscalation);
+  const auditModules = resolveModules(config);
+  const gatedModules = auditModules.filter((m) => m.requiresEscalation);
   const needsEscalationPrompt = gatedModules.length > 0;
 
   useInput((_input, key) => {
@@ -115,7 +105,7 @@ export function AuditScreen({ target, config, onComplete, onExit }: AuditScreenP
 
       const escalationGate = new EscalationGate(escalation === 'allow');
 
-      await runAudit(AUDIT_MODULES, target, config, engine, {
+      await runAudit(auditModules, target, config, engine, {
         onFinding: (finding) => {
           if (!cancelled) setFindings((prev) => [...prev, finding]);
         },

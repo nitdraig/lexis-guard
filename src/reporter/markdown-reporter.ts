@@ -2,6 +2,7 @@ import type { Reporter, ReportMeta } from './reporter.js';
 import type { DedupedFinding } from '../core/deduplicator.js';
 import type { Lexisignore } from '../config/lexisignore-schema.js';
 import { renderExecutiveSummary } from './executive-summary.js';
+import { COMPLIANCE_DISCLAIMER } from './compliance-mapping.js';
 
 export class MarkdownReporter implements Reporter {
   readonly format = 'markdown';
@@ -42,7 +43,16 @@ export class MarkdownReporter implements Reporter {
       if (f.cvss !== undefined) lines.push(`- **CVSS (DAST)**: ${f.cvss}`);
       if (f.riskScore !== undefined) lines.push(`- **Risk score**: ${f.riskScore}`);
       if (f.owasp) lines.push(`- **OWASP**: ${f.owasp}`);
+      if (f.compliance && Object.keys(f.compliance).length > 0) {
+        const compliance = Object.entries(f.compliance).map(([k, v]) => `${k}: ${v}`).join(', ');
+        lines.push(`- **Compliance**: ${compliance}`);
+      }
       lines.push(`- **Evidence**: ${f.evidence}`);
+      lines.push('');
+    }
+
+    if (this.hasCompliance(findings)) {
+      lines.push(`> ${COMPLIANCE_DISCLAIMER}`);
       lines.push('');
     }
 
@@ -67,5 +77,9 @@ export class MarkdownReporter implements Reporter {
       groups[key] = (groups[key] ?? 0) + 1;
     }
     return groups;
+  }
+
+  private hasCompliance(findings: DedupedFinding[]): boolean {
+    return findings.some((f) => f.compliance && Object.keys(f.compliance).length > 0);
   }
 }

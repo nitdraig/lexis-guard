@@ -5,6 +5,7 @@ import type { ReportMeta } from '../reporter/reporter.js';
 import { deduplicate, type DedupedFinding } from './deduplicator.js';
 import { Sanitizer } from './sanitizer.js';
 import { mapOwaspCategories } from '../reporter/owasp-mapping.js';
+import { mapComplianceCategories, type ComplianceFramework } from '../reporter/compliance-mapping.js';
 import { withRiskScore } from './risk-score.js';
 import { createAIRouter, type AiConfigSource } from '../ai/factory.js';
 import type { SynthesisOutput } from '../ai/ai-provider.js';
@@ -47,7 +48,9 @@ export async function runAuditPipeline(input: AuditPipelineInput): Promise<Audit
   const sanitizer = new Sanitizer(input.config.scope.allowed_targets);
   const sanitized = deduped.map((f) => sanitizer.sanitizeFinding(f));
   const mapped = mapOwaspCategories(sanitized);
-  const scored = withRiskScore(mapped);
+  const frameworks = input.config.compliance.frameworks as ComplianceFramework[];
+  const complianceMapped = mapComplianceCategories(mapped, frameworks);
+  const scored = withRiskScore(complianceMapped);
 
   const ignoredHashes = new Set((input.lexisignore?.ignore ?? []).map((e) => e.hash));
   const findings = scored.filter((f) => !ignoredHashes.has(f.hash));

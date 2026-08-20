@@ -1,6 +1,7 @@
 import type { Reporter, ReportMeta } from './reporter.js';
 import type { DedupedFinding } from '../core/deduplicator.js';
 import type { Lexisignore } from '../config/lexisignore-schema.js';
+import { COMPLIANCE_DISCLAIMER } from './compliance-mapping.js';
 
 /**
  * SARIF v2.1.0 reporter with CWE/CVSS mapping and native suppressions.
@@ -32,7 +33,10 @@ export class SarifReporter implements Reporter {
             }
           ],
           results: findings.map((f, index) => this.toResult(f, index)),
-          suppressions: this.toSuppressions(lexisignore)
+          suppressions: this.toSuppressions(lexisignore),
+          properties: this.hasCompliance(findings)
+            ? { compliance_disclaimer: COMPLIANCE_DISCLAIMER }
+            : undefined
         }
       ]
     };
@@ -60,7 +64,8 @@ export class SarifReporter implements Reporter {
         evidence: f.evidence,
         cvss_dast: f.cvss ?? null,
         risk_score: f.riskScore ?? null,
-        owasp: f.owasp ?? null
+        owasp: f.owasp ?? null,
+        compliance: f.compliance ?? null
       }
     };
 
@@ -111,5 +116,9 @@ export class SarifReporter implements Reporter {
         expires: entry.expires
       }
     }));
+  }
+
+  private hasCompliance(findings: DedupedFinding[]): boolean {
+    return findings.some((f) => f.compliance && Object.keys(f.compliance).length > 0);
   }
 }

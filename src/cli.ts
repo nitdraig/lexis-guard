@@ -8,15 +8,7 @@ import { defaultRawLexisrc } from './config/default.js';
 import { validateScope, canonicalizeTarget } from './core/scope-guard.js';
 import { HttpEngine } from './core/http-engine.js';
 import { discoverEndpoints, type Endpoint } from './openapi/parser.js';
-import type { AuditModule } from './modules/audit-module.js';
-import { SecurityModule } from './modules/security-module.js';
-import { PerformanceModule } from './modules/performance-module.js';
-import { ScalabilityModule } from './modules/scalability-module.js';
-import { InjectionModule } from './modules/injection-module.js';
-import { SsrfModule } from './modules/ssrf-module.js';
-import { JwtModule } from './modules/jwt-module.js';
-import { SecretsScanner } from './modules/secrets-scanner.js';
-import { ContractModule } from './modules/contract-module.js';
+import { defaultPluginRegistry } from './plugins/registry.js';
 import { EscalationGate } from './core/escalation-gate.js';
 import { runAuditPipeline } from './core/audit-pipeline.js';
 import { resolveAuthProfiles } from './core/auth-guard.js';
@@ -170,16 +162,10 @@ async function main(): Promise<number> {
   }
 
   // Modulos — gated modules (injection / SSRF) only run with --allow-exploitation.
-  const modules: AuditModule[] = [
-    new SecurityModule(),
-    new PerformanceModule(),
-    new ScalabilityModule(),
-    new InjectionModule(),
-    new SsrfModule(),
-    new JwtModule(),
-    new SecretsScanner(),
-    new ContractModule()
-  ];
+  const modules = defaultPluginRegistry().resolve(
+    config.plugins.enabled,
+    config.plugins.disabled
+  );
   const escalationGate = new EscalationGate(options.allowExploitation === true);
   const allFindings: Awaited<ReturnType<typeof modules[0]['run']>> = [];
 
